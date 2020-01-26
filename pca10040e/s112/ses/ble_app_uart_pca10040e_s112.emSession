@@ -60,22 +60,22 @@
   <Watches active="0" update="Never"/>
  </Watch4>
  <Files>
-  <SessionOpenFile windowGroup="DockEditLeft" x="23" y="844" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../main.c" selected="1" top="903" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="1165" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../main.c" selected="1" top="1141" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="99" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../../components/libraries/util/app_error_weak.c" selected="0" top="80" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="72" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../../components/libraries/util/app_error.c" selected="0" top="57" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="330" useTextEdit="1" useBinaryEdit="0" left="0" path="/usr/share/segger_embedded_studio_for_arm_4.22/source/thumb_crt0.s" selected="0" top="311" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="357" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../../components/softdevice/common/nrf_sdh.c" selected="0" top="338" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="306" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../../components/softdevice/common/nrf_sdh_ble.c" selected="0" top="287" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="226" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../../components/ble/nrf_ble_gatt/nrf_ble_gatt.c" selected="0" top="207" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="60" y="207" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../../components/libraries/log/src/nrf_log_internal.h" selected="0" top="176" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="207" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../../components/libraries/log/src/nrf_log_internal.h" selected="0" top="195" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="432" useTextEdit="1" useBinaryEdit="0" left="0" path="../config/sdk_config.h" selected="0" top="407" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="498" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../../external/fprintf/nrf_fprintf_format.c" selected="0" top="485" codecName=""/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="257" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../../components/libraries/memobj/nrf_memobj.c" selected="0" top="215" codecName=""/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="498" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../../external/fprintf/nrf_fprintf_format.c" selected="0" top="485" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="257" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../../components/libraries/memobj/nrf_memobj.c" selected="0" top="215" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditRight" x="0" y="83" useTextEdit="1" useBinaryEdit="0" left="17" path="../../../../../../components/libraries/util/sdk_errors.h" selected="0" top="85" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditRight" x="9" y="313" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../../components/ble/ble_services/ble_nus/ble_nus.c" selected="0" top="287" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditRight" x="0" y="313" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../../components/ble/ble_services/ble_nus/ble_nus.c" selected="0" top="287" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditRight" x="0" y="220" useTextEdit="1" useBinaryEdit="0" left="17" path="../../../../../../components/softdevice/s112/headers/ble.h" selected="0" top="195" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditRight" x="0" y="99" useTextEdit="1" useBinaryEdit="0" left="19" path="../../../../../../components/ble/nrf_ble_gatt/nrf_ble_gatt.h" selected="0" top="81" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditRight" x="0" y="99" useTextEdit="1" useBinaryEdit="0" left="17" path="../../../../../../components/ble/nrf_ble_gatt/nrf_ble_gatt.h" selected="0" top="81" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditRight" x="0" y="112" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../../components/libraries/log/nrf_log.h" selected="0" top="87" codecName="Default"/>
  </Files>
- <ARMCrossStudioWindow activeProject="ble_app_uart_pca10040e_s112" fileDialogDefaultFilter="*.asm;*.s;*.inc" autoConnectTarget="J-Link" buildConfiguration="Release" sessionSettings="" debugSearchFileMap="/home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96/modules/nrfx/mdk/ses_startup_nrf52810.s&#xa;/home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/modules/nrfx/mdk/ses_startup_nrf52810.s" fileDialogInitialDirectory="/home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/modules/nrfx/mdk" debugSearchPath="" autoConnectCapabilities="3711"/>
+ <ARMCrossStudioWindow activeProject="ble_app_uart_pca10040e_s112" fileDialogDefaultFilter="*.asm;*.s;*.inc" autoConnectTarget="J-Link" buildConfiguration="Release" sessionSettings="" debugSearchFileMap="/home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96/modules/nrfx/mdk/ses_startup_nrf52810.s&#xa;/home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/modules/nrfx/mdk/ses_startup_nrf52810.s" fileDialogInitialDirectory="/home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/modules/nrfx/mdk" debugSearchPath="" autoConnectCapabilities="3199"/>
 </session>

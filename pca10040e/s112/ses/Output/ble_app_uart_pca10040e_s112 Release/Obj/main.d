@@ -1,5 +1,5 @@
 Output/ble_app_uart_pca10040e_s112\ Release/Obj/main.o: \
- /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/examples/ble_peripheral/LURA_TEST_APP_DEV/main.c \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/examples/ble_peripheral/LURA_CLIENT_APP/main.c \
  /usr/share/segger_embedded_studio_for_arm_4.22/include/stdint.h \
  /usr/share/segger_embedded_studio_for_arm_4.22/include/string.h \
  /usr/share/segger_embedded_studio_for_arm_4.22/include/__crossworks.h \
@@ -81,9 +81,6 @@ Output/ble_app_uart_pca10040e_s112\ Release/Obj/main.o: \
  ../../../../../../modules/nrfx/drivers/include/nrfx_clock.h \
  ../../../../../../modules/nrfx/hal/nrf_clock.h \
  ../../../../../../modules/nrfx/drivers/include/nrfx_power_clock.h \
- ../../../../../../integration/nrfx/legacy/nrf_drv_rtc.h \
- ../../../../../../modules/nrfx/drivers/include/nrfx_rtc.h \
- ../../../../../../modules/nrfx/hal/nrf_rtc.h \
  ../../../../../../components/libraries/delay/nrf_delay.h \
  ../../../../../../integration/nrfx/legacy/nrf_drv_gpiote.h \
  ../../../../../../modules/nrfx/drivers/include/nrfx_gpiote.h \
@@ -130,4 +127,15 @@ Output/ble_app_uart_pca10040e_s112\ Release/Obj/main.o: \
  ../../../../../../components/libraries/memobj/nrf_memobj.h \
  ../../../../../../components/libraries/balloc/nrf_balloc.h \
  ../../../../../../components/libraries/log/nrf_log_default_backends.h \
+ ../../../../../../components/libraries/fstorage/nrf_fstorage.h \
+ ../../../../../../components/libraries/fstorage/nrf_fstorage_sd.h \
+ ../../../../../../components/libraries/fstorage/nrf_fstorage.h \
+ ../../../../../../components/libraries/fds/fds.h \
+ ../../../../../../components/ble/peer_manager/peer_manager.h \
+ ../../../../../../components/ble/peer_manager/peer_manager_types.h \
+ ../../../../../../components/ble/common/ble_gatt_db.h \
+ ../../../../../../components/ble/peer_manager/peer_database.h \
+ ../../../../../../components/ble/peer_manager/peer_manager_internal.h \
+ ../../../../../../components/ble/peer_manager/peer_manager_handler.h \
+ ../../../../../../components/ble/peer_manager/peer_manager.h \
  ../../../../../../modules/nrfx/hal/nrf_uarte.h

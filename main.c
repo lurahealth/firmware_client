@@ -64,7 +64,6 @@
 #include "nrf_ble_gatt.h"
 #include "nrf_saadc.h"
 #include "nrf_drv_clock.h"
-#include "nrf_drv_rtc.h"
 #include "nrf_delay.h"
 #include "nrf_drv_gpiote.h"
 #include "nrf_drv_saadc.h"
@@ -93,6 +92,14 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
+// Included for peer manager
+#include "nrf_fstorage.h"
+#include "nrf_fstorage_sd.h"
+#include "fds.h"
+#include "peer_manager.h"
+#include "peer_manager_handler.h"
+#include "ble_conn_state.h"
+
 #if defined (UART_PRESENT)
 #include "nrf_uart.h"
 #endif
@@ -109,12 +116,12 @@
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 
-#define APP_ADV_INTERVAL                510                                         /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
+#define APP_ADV_INTERVAL                200                                         /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
 
-#define APP_ADV_DURATION                5000                                        /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
+#define APP_ADV_DURATION                18000                                       /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
 
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(75, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (75 ms), Connection interval uses 1.25 ms units. */
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (200 ms), Connection interval uses 1.25 ms units. */
 #define SLAVE_LATENCY                   0                                           /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000)                       /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
@@ -126,9 +133,16 @@
 #define UART_TX_BUF_SIZE                256                                         /**< UART TX buffer size. */
 #define UART_RX_BUF_SIZE                256                                         /**< UART RX buffer size. */
 
-#define SAMPLES_IN_BUFFER               11                                          /**< SAADC buffer > */
-#define COMPARE_COUNTERTIME            (10UL)                                        /**< Get Compare event COMPARE_TIME seconds after the counter starts from 0. */
+#define SEC_PARAM_BOND                  1                                           /**< Perform bonding. */
+#define SEC_PARAM_MITM                  0                                           /**< Man In The Middle protection not required. */
+#define SEC_PARAM_LESC                  0                                           /**< LE Secure Connections not enabled. */
+#define SEC_PARAM_KEYPRESS              0                                           /**< Keypress notifications not enabled. */
+#define SEC_PARAM_IO_CAPABILITIES       BLE_GAP_IO_CAPS_NONE                        /**< No I/O capabilities. */
+#define SEC_PARAM_OOB                   0                                           /**< Out Of Band data not available. */
+#define SEC_PARAM_MIN_KEY_SIZE          7                                           /**< Minimum encryption key size. */
+#define SEC_PARAM_MAX_KEY_SIZE          16                                          /**< Maximum encryption key size. */
 
+#define SAMPLES_IN_BUFFER               11                                          /**< SAADC buffer > */
 
 #define NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(PIN_P) \
 {                                                   \
@@ -163,25 +177,19 @@ static ble_uuid_t m_adv_uuids[]          =                                      
 };
 
 
-/* UCHU nRF52810 port assignments */
+/* Lura Health nRF52810 port assignments */
 #define ENABLE_ANALOG_PIN 4
 
 /* GLOBALS */
-static   uint32_t AVG_PH_VAL       = 0;
-static   uint32_t AVG_BATT_VAL     = 0;
-static   uint32_t AVG_TEMP_VAL     = 0;
-bool              PH_IS_READ       = false;
-bool              BATTERY_IS_READ  = false;
-bool              SAADC_CALIBRATED = false;
-bool              CONNECTION_MADE  = false;
-
-/* GLOBAL PACKET DATA */
-uint8_t*          total_packet;
-uint16_t          total_size;
-
+uint32_t AVG_PH_VAL        = 0;
+uint32_t AVG_BATT_VAL      = 0;
+uint32_t AVG_TEMP_VAL      = 0;
+bool      PH_IS_READ       = false;
+bool      BATTERY_IS_READ  = false;
+bool      SAADC_CALIBRATED = false;
+bool      CONNECTION_MADE  = false;
 
 static const nrf_drv_timer_t   m_timer = NRF_DRV_TIMER_INSTANCE(1);
-const        nrf_drv_rtc_t     rtc     = NRF_DRV_RTC_INSTANCE(0);
 static       nrf_saadc_value_t m_buffer_pool[1][SAMPLES_IN_BUFFER];
 static       nrf_ppi_channel_t m_ppi_channel;
 
@@ -194,8 +202,7 @@ static inline void disable_pH_voltage_reading (void);
 static inline void saadc_init                 (void);
 static inline void enable_analog_pin          (void);
 static inline void disable_analog_pin         (void);
-void               disconnect_restart_timer   (void);
-void               send_data_and_restart      (void);
+static        void advertising_start          (bool erase_bonds);
 
 
 /**@brief Function for assert macro callback.
@@ -215,14 +222,59 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
     app_error_handler(DEAD_BEEF, line_num, p_file_name);
 }
 
+
+/**@brief Function for handling Peer Manager events.
+ *
+ * @param[in] p_evt  Peer Manager event.
+ */
+static void pm_evt_handler(pm_evt_t const * p_evt)
+{
+    NRF_LOG_INFO("ENTERED PM_EVT_HANDLER");
+    NRF_LOG_FLUSH();
+    pm_handler_on_pm_evt(p_evt);
+    pm_handler_flash_clean(p_evt);
+
+    switch (p_evt->evt_id)
+    {
+        case PM_EVT_CONN_SEC_SUCCEEDED:
+            NRF_LOG_INFO("PM_EVT_CONN_SEC_SUCCEEDED");
+            NRF_LOG_FLUSH();
+            break;
+
+        case PM_EVT_PEERS_DELETE_SUCCEEDED:
+            NRF_LOG_INFO("PM_EVT_CONN_SEC_SUCCEEDED");
+            NRF_LOG_FLUSH();            
+            advertising_start(false);
+            break;
+
+        case PM_EVT_BONDED_PEER_CONNECTED:  
+            NRF_LOG_INFO("PM_EVT_BONDED_PEER_CONNECTED");
+            NRF_LOG_FLUSH();
+            break;
+
+        case PM_EVT_CONN_SEC_CONFIG_REQ:
+        {
+            // Allow pairing request from an already bonded peer.
+            NRF_LOG_INFO("PM_EVT_CONN_SEC_CONFIG_REQ");
+            NRF_LOG_FLUSH();
+            pm_conn_sec_config_t conn_sec_config = {.allow_repairing = true};
+            pm_conn_sec_config_reply(p_evt->conn_handle, &conn_sec_config);
+        } break;
+
+        default:
+            break;
+    }
+}
+
+
+
 /**@brief Function for initializing the timer module.
  */
-ret_code_t TIMER_err_code;
-
 static inline void timers_init(void)
 {
-    TIMER_err_code = app_timer_init();
-    APP_ERROR_CHECK(TIMER_err_code);
+    uint32_t err_code;
+    err_code = app_timer_init();
+    APP_ERROR_CHECK(err_code);
 }
 
 
@@ -241,7 +293,7 @@ static inline void gap_params_init(void)
     BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
 
     err_code = sd_ble_gap_device_name_set(&sec_mode,
-                                          (const uint8_t *) DEVICE_NAME,
+                                         (const uint8_t *)DEVICE_NAME,
                                           strlen(DEVICE_NAME));
     APP_ERROR_CHECK(err_code);
 
@@ -307,10 +359,6 @@ static inline void nus_data_handler(ble_nus_evt_t * p_evt)
             while (app_uart_put('\n') == NRF_ERROR_BUSY);
         }
     }
-    if (p_evt->type == BLE_NUS_EVT_TX_RDY){
-        NRF_LOG_INFO("READY TO TRANSMIT DATA\n");
-        NRF_LOG_FLUSH();
-    }
 
 }
 /**@snippet [Handling the data received over BLE] */
@@ -324,13 +372,13 @@ static void services_init(void)
     ble_nus_init_t     nus_init;
     nrf_ble_qwr_init_t qwr_init = {0};
 
-    // Initialize Queued Write Module.
+    // Initialize Queued Write Module
     qwr_init.error_handler = nrf_qwr_error_handler;
 
     err_code = nrf_ble_qwr_init(&m_qwr, &qwr_init);
     APP_ERROR_CHECK(err_code);
 
-    // Initialize NUS.
+    // Initialize NUS
     memset(&nus_init, 0, sizeof(nus_init));
 
     nus_init.data_handler = nus_data_handler;
@@ -357,10 +405,8 @@ static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
 
     if (p_evt->evt_type == BLE_CONN_PARAMS_EVT_FAILED)
     {
-        NRF_LOG_INFO("DISCONNECTING BOOIII");
-        nrf_delay_ms(3000);
         err_code = sd_ble_gap_disconnect(m_conn_handle, 
-                                            BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
+                                         BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
         APP_ERROR_CHECK(err_code);
     }
 }
@@ -408,7 +454,7 @@ static void sleep_mode_enter(void)
     uint32_t err_code; 
 
     // Go to system-off mode (function will not return; wakeup causes reset).
-    err_code = sd_power_system_off();
+    //err_code = sd_power_system_off();
     APP_ERROR_CHECK(err_code);
 }
 
@@ -454,9 +500,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             APP_ERROR_CHECK(err_code);
             CONNECTION_MADE = true;
 
-            NRF_LOG_INFO("CONNECTION MADE, %d \n", CONNECTION_MADE);
- 
-
+            NRF_LOG_INFO("CONNECTION MADE (ble_gap_evt) \n");
 
             break;
 
@@ -470,7 +514,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             // LED indication will be changed when advertising starts.
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
             CONNECTION_MADE = false;
-            NRF_LOG_INFO("DISCONNECTED...\n");
+            NRF_LOG_INFO("DISCONNECTED\n");
             break;
 
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
@@ -485,21 +529,6 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
                                                                          &phys);
             APP_ERROR_CHECK(err_code);
         } break;
-
-        case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
-            // Pairing not supported
-            err_code = 
-                sd_ble_gap_sec_params_reply(m_conn_handle, 
-                                            BLE_GAP_SEC_STATUS_PAIRING_NOT_SUPP, 
-                                            NULL, NULL);
-            APP_ERROR_CHECK(err_code);
-            break;
-
-        case BLE_GATTS_EVT_SYS_ATTR_MISSING:
-            // No system attributes have been stored.
-            err_code = sd_ble_gatts_sys_attr_set(m_conn_handle, NULL, 0, 0);
-            APP_ERROR_CHECK(err_code);
-            break;
 
         case BLE_GATTC_EVT_TIMEOUT:
             // Disconnect on GATT Client timeout event.
@@ -517,6 +546,19 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
                                       BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             CONNECTION_MADE = false;
             APP_ERROR_CHECK(err_code);
+            break;
+
+         case BLE_GAP_EVT_AUTH_STATUS:
+             NRF_LOG_INFO("BLE_GAP_EVT_AUTH_STATUS: status=0x%x bond=0x%x lv4: %d kdist_own:0x%x kdist_peer:0x%x",
+                          p_ble_evt->evt.gap_evt.params.auth_status.auth_status,
+                          p_ble_evt->evt.gap_evt.params.auth_status.bonded,
+                          p_ble_evt->evt.gap_evt.params.auth_status.sm1_levels.lv4,
+                          *((uint8_t *)&p_ble_evt->evt.gap_evt.params.auth_status.kdist_own),
+                          *((uint8_t *)&p_ble_evt->evt.gap_evt.params.auth_status.kdist_peer));
+            break;
+
+        case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
+            NRF_LOG_INFO("BLE_GAP_EVT_SEC_PARAMS_REQUEST");
             break;
 
         default:
@@ -553,98 +595,51 @@ static void ble_stack_init(void)
 }
 
 
-/**@brief   Function for handling app_uart events.
- *
- * @details This function will receive a single character from the app_uart 
- *          module and append it to a string. The string will be be sent over 
- *          BLE when the last character received was a 'new line' '\n' 
- *          (hex 0x0A) or if the string has reached the maximum data length.
+/**@brief Function for the Peer Manager initialization.
  */
-/**@snippet [Handling the data received over UART] */
-static inline void uart_event_handle(app_uart_evt_t * p_event)
+static void peer_manager_init(void)
 {
-    static uint8_t data_array[BLE_NUS_MAX_DATA_LEN];
-    static uint8_t index = 0;
-    uint32_t       err_code;
+    ble_gap_sec_params_t sec_param;
+    ret_code_t           err_code;
 
-    switch (p_event->evt_type)
-    {
-        case APP_UART_DATA_READY:
-            UNUSED_VARIABLE(app_uart_get(&data_array[index]));
-            index++;
+    err_code = pm_init();
+    APP_ERROR_CHECK(err_code);
 
-            if ((data_array[index - 1] == '\n') ||
-                (data_array[index - 1] == '\r') ||
-                (index >= m_ble_nus_max_data_len))
-            {
-                if (index > 1)
-                {
-                    NRF_LOG_DEBUG("Ready to send data over BLE NUS");
-                    NRF_LOG_HEXDUMP_DEBUG(data_array, index);
+    memset(&sec_param, 0, sizeof(ble_gap_sec_params_t));
 
-                    do
-                    {
-                        uint16_t length = (uint16_t)index;
-                        err_code = ble_nus_data_send(&m_nus, data_array, 
-                                                     &length, m_conn_handle);
-                        if ((err_code != NRF_ERROR_INVALID_STATE) &&
-                            (err_code != NRF_ERROR_RESOURCES) &&
-                            (err_code != NRF_ERROR_NOT_FOUND))
-                        {
-                            APP_ERROR_CHECK(err_code);
-                        }
-                    } while (err_code == NRF_ERROR_RESOURCES);
-                }
+    // Security parameters to be used for all security procedures.
+    sec_param.bond           = SEC_PARAM_BOND;
+    sec_param.mitm           = SEC_PARAM_MITM;
+    sec_param.lesc           = SEC_PARAM_LESC;
+    sec_param.keypress       = SEC_PARAM_KEYPRESS;
+    sec_param.io_caps        = SEC_PARAM_IO_CAPABILITIES;
+    sec_param.oob            = SEC_PARAM_OOB;
+    sec_param.min_key_size   = SEC_PARAM_MIN_KEY_SIZE;
+    sec_param.max_key_size   = SEC_PARAM_MAX_KEY_SIZE;
+    sec_param.kdist_own.enc  = 1;
+    sec_param.kdist_own.id   = 1;
+    sec_param.kdist_peer.enc = 1;
+    sec_param.kdist_peer.id  = 1;
 
-                index = 0;
-            }
-            break;
+    err_code = pm_sec_params_set(&sec_param);
+    APP_ERROR_CHECK(err_code);
 
-        case APP_UART_COMMUNICATION_ERROR:
-            //APP_ERROR_HANDLER(p_event->data.error_communication);
-            break;
-
-        case APP_UART_FIFO_ERROR:
-            //APP_ERROR_HANDLER(p_event->data.error_code);
-            break;
-
-        default:
-            break;
-    }
-}
-/**@snippet [Handling the data received over UART] */
-
-
-/**@brief  Function for initializing the UART module.
- */
-/**@snippet [UART Initialization] */
-static void uart_init(void)
-{
-    uint32_t                     err_code;
-    app_uart_comm_params_t const comm_params =
-    {
-        .rx_pin_no    = 11,
-        .tx_pin_no    = TX_PIN_NUMBER,
-        .rts_pin_no   = 12,
-        .cts_pin_no   = CTS_PIN_NUMBER,
-        .flow_control = APP_UART_FLOW_CONTROL_DISABLED,
-        .use_parity   = false,
-#if defined (UART_PRESENT)
-        .baud_rate    = NRF_UART_BAUDRATE_115200
-#else
-        .baud_rate    = NRF_UARTE_BAUDRATE_115200
-#endif
-    };
-
-    APP_UART_FIFO_INIT(&comm_params,
-                       UART_RX_BUF_SIZE,
-                       UART_TX_BUF_SIZE,
-                       uart_event_handle,
-                       APP_IRQ_PRIORITY_LOWEST,
-                       err_code);
+    err_code = pm_register(pm_evt_handler);
     APP_ERROR_CHECK(err_code);
 }
-/**@snippet [UART Initialization] */
+
+
+/**@brief Clear bond information from persistent storage.
+ */
+static void delete_bonds(void)
+{
+    ret_code_t err_code;
+
+    NRF_LOG_INFO("Erase bonds!");
+
+    err_code = pm_peers_delete();
+    APP_ERROR_CHECK(err_code);
+}
 
 
 /**@brief Function for initializing the Advertising functionality.
@@ -658,7 +653,7 @@ static void advertising_init(void)
 
     init.advdata.name_type          = BLE_ADVDATA_FULL_NAME;
     init.advdata.include_appearance = false;
-    init.advdata.flags              = BLE_GAP_ADV_FLAGS_LE_ONLY_LIMITED_DISC_MODE;
+    init.advdata.flags               = BLE_GAP_ADV_FLAGS_LE_ONLY_LIMITED_DISC_MODE;
 
     init.srdata.uuids_complete.uuid_cnt = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
     init.srdata.uuids_complete.p_uuids  = m_adv_uuids;
@@ -710,10 +705,19 @@ static void idle_state_handle(void)
 
 /**@brief Function for starting advertising.
  */
-static void advertising_start(void)
+static void advertising_start(bool erase_bonds)
 {
-    uint32_t err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
-    APP_ERROR_CHECK(err_code);
+    if (erase_bonds == true)
+    {
+        delete_bonds();
+        // Advertising is started by PM_EVT_PEERS_DELETED_SUCEEDED event
+    }
+    else
+    {
+        ret_code_t err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
+
+        APP_ERROR_CHECK(err_code);
+    }
 }
 
 
@@ -727,11 +731,10 @@ static inline void enable_analog_circuit(void)
     }
     nrf_drv_gpiote_out_init(ENABLE_ANALOG_PIN, &config);
     nrf_drv_gpiote_out_set(ENABLE_ANALOG_PIN);
-    nrf_delay_ms(1);
 }
 
-
-
+/* This function sets enable pin for ISFET circuitry to LOW
+ */
 static inline void disable_analog_pin(void)
 {
      // Redundant, but follows design
@@ -785,40 +788,6 @@ static inline void saadc_sampling_event_enable(void)
 }
 
 
-/* Function for converting numbers > 9 to byte arrays in ASCII format
- * @params: Averaged value read from SAADC, ptr to byte array
- */
-static inline void num_to_byte_arr(uint8_t *data_arr, uint32_t avg_val)
-{
-    uint8_t dig1, dig2, dig3;
-    if(avg_val > 99) {
-        dig1 = avg_val % 10;
-        dig2 = ((avg_val % 100) - dig1) / 10;
-        dig3 = (avg_val - (dig1 + (dig2 * 10))) / 100;
-    
-        // Convert to ASCII values
-        data_arr[0] = dig3 + 48;
-        data_arr[1] = dig2 + 48;
-        data_arr[2] = dig1 + 48;
-    }
-    else if(avg_val > 9) {
-        dig3 = 0;
-        dig1 = avg_val % 10;
-        dig2 = ((avg_val % 100) - dig1) / 10;
-
-        // Convert to ASCII values
-        data_arr[0] = dig2 + 48;
-        data_arr[1] = dig1 + 48;
-    }
-    else {
-        dig3 = 0;
-        dig2 = 0;
-        dig1 = avg_val;
-        // Convert to ASCII value
-        data_arr[0] = avg_val + 48;
-    }
-}
-
 static inline void restart_saadc(void)
 {
     nrfx_timer_uninit(&m_timer);
@@ -830,173 +799,62 @@ static inline void restart_saadc(void)
     enable_pH_voltage_reading(); 
 }
 
-// Integers can have maximum 3 digits with 8-bit SAADC output
-static inline int length_of_int(int x)
+
+// Pack integer values into byte array to send via bluetooth
+void create_bluetooth_packet(uint32_t ph_val,
+                             uint32_t batt_val,        
+                             uint32_t temp_val, 
+                             uint8_t* total_packet)
 {
-    if (x >= 100)        return 3;
-    if (x >= 10)         return 2;
-    return 1;
-}
+    /*
+      {0,0,0,0,44,    pH value arr[0-3], comma arr[4]
+       0,0,0,0,44,    temperature arr[5-8], comma arr[9]
+       0,0,0,0,10};   battery value arr[10-13], EOL arr[14]
+    */
 
-/* This function combines the ph_data and temp_data into one bluetooth
- * packet. The packet follows the format [ph_data,temp_data\n] where
- * data fields are between 1-3 bytes each (one per digit). 
- */
-static inline uint8_t* format_bluetooth_packet(uint8_t*  ph_data,  
-                                               uint8_t*  batt_data,    
-                                               uint8_t*  temp_data,
-                                               uint8_t*  total_packet, 
-                                               uint16_t* total_size)
-{
-    num_to_byte_arr(temp_data, AVG_TEMP_VAL);
-    num_to_byte_arr(batt_data, AVG_BATT_VAL);
-    // Plus two for comma, plus one for EOL
-    *total_size = length_of_int(AVG_PH_VAL) + length_of_int(AVG_TEMP_VAL) + length_of_int(AVG_BATT_VAL) + 2 + 1;
-    NRF_LOG_INFO("TOTAL SIZE: %d\n", *total_size);
-    total_packet = (uint8_t*) malloc(sizeof(uint8_t) * (*total_size));
-    // Copy pH data, copy temp data, add comma and EOL
-    memcpy(total_packet, ph_data, length_of_int(AVG_PH_VAL));
-    memcpy(total_packet + length_of_int(AVG_PH_VAL) + 1, 
-                        temp_data, length_of_int(AVG_TEMP_VAL));
-    memcpy(total_packet + length_of_int(AVG_PH_VAL) + 2 + length_of_int(AVG_TEMP_VAL), 
-                        batt_data, length_of_int(AVG_BATT_VAL));
-    total_packet[length_of_int(AVG_PH_VAL)] = 44; // comma
-    total_packet[length_of_int(AVG_PH_VAL)+1+length_of_int(AVG_TEMP_VAL)] = 44; // comma
-    total_packet[*total_size - 1] = 10; // EOL
-    return total_packet;
-}
+    uint32_t temp = 0;                  // hold intermediate divisions of variables
+    uint32_t ASCII_DIG_BASE = 48;
 
-static inline uint8_t* create_bluetooth_packet(uint32_t ph_val,
-                                               uint32_t batt_val,        
-                                               uint32_t temp_val, 
-                                               uint8_t* total_packet,  
-                                               uint16_t* total_size)
-{
-    uint8_t threedig_PH_data  [3] = {0, 0, 0};
-    uint8_t threedig_BATT_data[3] = {0, 0, 0};
-    uint8_t threedig_TEMP_data[3] = {0, 0, 0};
-    uint8_t twodig_PH_data    [2] = {0, 0};
-    uint8_t twodig_BATT_data  [2] = {0, 0};
-    uint8_t twodig_TEMP_data  [2] = {0, 0};
-    uint8_t onedig_PH_data    [1] = {0};
-    uint8_t onedig_BATT_data  [1] = {0};
-    uint8_t onedig_TEMP_data  [1] = {0};
-
-    uint8_t* packet;
-
-    if(AVG_PH_VAL > 99) {
-        num_to_byte_arr(threedig_PH_data, AVG_PH_VAL);
-        // Convert temp number to appropriate byte array
-        if(AVG_TEMP_VAL > 99) {
-            if(AVG_BATT_VAL > 99)
-                packet = format_bluetooth_packet(threedig_PH_data, threedig_BATT_data, threedig_TEMP_data,
-                                                                            total_packet, total_size);
-            else if(AVG_BATT_VAL > 9)
-                packet = format_bluetooth_packet(threedig_PH_data, twodig_BATT_data, threedig_TEMP_data,
-                                                                            total_packet, total_size);
-            else
-                packet = format_bluetooth_packet(threedig_PH_data, onedig_BATT_data, threedig_TEMP_data,
-                                                                            total_packet, total_size);
-        }
-        else if(AVG_TEMP_VAL > 9) {
-            if(AVG_BATT_VAL > 99)
-                packet = format_bluetooth_packet(threedig_PH_data, threedig_BATT_data, twodig_TEMP_data,
-                                                                            total_packet, total_size);
-            else if(AVG_BATT_VAL > 9)
-                packet = format_bluetooth_packet(threedig_PH_data, twodig_BATT_data, twodig_TEMP_data,
-                                                                            total_packet, total_size);
-            else
-                packet = format_bluetooth_packet(threedig_PH_data, onedig_BATT_data, twodig_TEMP_data,
-                                                                            total_packet, total_size);
-        }
+    // Pack ph_val into appropriate location
+    temp = ph_val;
+    for(int i = 3; i >= 0; i--){
+        if (i == 3) total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
         else {
-            if(AVG_BATT_VAL > 99)
-                packet = format_bluetooth_packet(threedig_PH_data, threedig_BATT_data, onedig_TEMP_data,
-                                                                            total_packet, total_size);
-            else if(AVG_BATT_VAL > 9)
-                packet = format_bluetooth_packet(threedig_PH_data, twodig_BATT_data, onedig_TEMP_data,
-                                                                            total_packet, total_size);
-            else
-                packet = format_bluetooth_packet(threedig_PH_data, onedig_BATT_data, onedig_TEMP_data,
-                                                                            total_packet, total_size);
+            temp = temp / 10;
+            total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
         }
     }
-    else if(AVG_PH_VAL > 9) {
-        num_to_byte_arr(twodig_PH_data, AVG_PH_VAL);
-        // Convert temp number to appropriate byte array
-        if(AVG_TEMP_VAL > 99) {
-            if(AVG_BATT_VAL > 99)
-                packet = format_bluetooth_packet(twodig_PH_data, threedig_BATT_data, threedig_TEMP_data,
-                                                                            total_packet, total_size);
-            else if(AVG_BATT_VAL > 9)
-                packet = format_bluetooth_packet(twodig_PH_data, twodig_BATT_data, threedig_TEMP_data,
-                                                                            total_packet, total_size);
-            else
-                packet = format_bluetooth_packet(twodig_PH_data, onedig_BATT_data, threedig_TEMP_data,
-                                                                            total_packet, total_size);
-        }
-        else if(AVG_TEMP_VAL > 9) {
-            if(AVG_BATT_VAL > 99)
-                packet = format_bluetooth_packet(twodig_PH_data, threedig_BATT_data, twodig_TEMP_data,
-                                                                            total_packet, total_size);
-            else if(AVG_BATT_VAL > 9)
-                packet = format_bluetooth_packet(twodig_PH_data, twodig_BATT_data, twodig_TEMP_data,
-                                                                            total_packet, total_size);
-            else
-                packet = format_bluetooth_packet(twodig_PH_data, onedig_BATT_data, twodig_TEMP_data,
-                                                                            total_packet, total_size);
-        }
-        else 
-            if(AVG_BATT_VAL > 99)
-                packet = format_bluetooth_packet(twodig_PH_data, threedig_BATT_data, onedig_TEMP_data,
-                                                                            total_packet, total_size);
-            else if(AVG_BATT_VAL > 9)
-                packet = format_bluetooth_packet(twodig_PH_data, twodig_BATT_data, onedig_TEMP_data,
-                                                                            total_packet, total_size);
-            else
-                packet = format_bluetooth_packet(twodig_PH_data, onedig_BATT_data, onedig_TEMP_data,
-                                                                            total_packet, total_size);
-    }
-    else {
-        num_to_byte_arr(onedig_PH_data, AVG_PH_VAL);
-        // Convert temp number to appropriate byte array
-        if(AVG_TEMP_VAL > 99) {
-            if(AVG_BATT_VAL > 99)
-                packet = format_bluetooth_packet(onedig_PH_data, threedig_BATT_data, threedig_TEMP_data,
-                                                                            total_packet, total_size);
-            else if(AVG_BATT_VAL > 9)
-                packet = format_bluetooth_packet(onedig_PH_data, twodig_BATT_data, threedig_TEMP_data,
-                                                                            total_packet, total_size);
-            else
-                packet = format_bluetooth_packet(onedig_PH_data, onedig_BATT_data, threedig_TEMP_data,
-                                                                            total_packet, total_size);
-        }
-        else if(AVG_TEMP_VAL > 9) {
-            if(AVG_BATT_VAL > 99)
-                packet = format_bluetooth_packet(onedig_PH_data, threedig_BATT_data, twodig_TEMP_data,
-                                                                            total_packet, total_size);
-            else if(AVG_BATT_VAL > 9)
-                packet = format_bluetooth_packet(onedig_PH_data, twodig_BATT_data, twodig_TEMP_data,
-                                                                            total_packet, total_size);
-            else
-                packet = format_bluetooth_packet(onedig_PH_data, onedig_BATT_data, twodig_TEMP_data,
-                                                                            total_packet, total_size);
-        }
+
+    // Pack temp_val into appropriate location
+    temp = temp_val;
+    for(int i = 8; i >= 5; i--){
+        if (i == 8) total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
         else {
-            if(AVG_BATT_VAL > 99)
-                packet = format_bluetooth_packet(onedig_PH_data, threedig_BATT_data, onedig_TEMP_data,
-                                                                            total_packet, total_size);
-            else if(AVG_BATT_VAL > 9)
-                packet = format_bluetooth_packet(onedig_PH_data, twodig_BATT_data, onedig_TEMP_data,
-                                                                            total_packet, total_size);
-            else
-                packet = format_bluetooth_packet(onedig_PH_data, onedig_BATT_data, onedig_TEMP_data,
-                                                                            total_packet, total_size);
+            temp = temp / 10;
+            total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
         }
     }
-    return packet;    
+
+    // Pack batt_val into appropriate location
+    temp = batt_val;
+
+    for(int i = 13; i >= 10; i--){
+        if (i == 13) total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
+        else {
+            temp = temp / 10;
+            total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
+        }
+    }
 }
 
+static inline uint32_t saadc_result_to_mv(uint32_t saadc_result)
+{
+    float saadc_denom   = 4095.0;
+    float saadc_vref_mv = 3000.0;
+    float saadc_res_in_mv = ((float)saadc_result/saadc_denom) * saadc_vref_mv;
+
+    return (uint32_t)saadc_res_in_mv;
+}
 
 /**
  * Function is called when SAADC reading event is done. First done event
@@ -1013,10 +871,12 @@ static inline void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
     if (p_event->type == NRF_DRV_SAADC_EVT_DONE) 
     {
         ret_code_t err_code;
-        //uint16_t   total_size;
-        uint32_t avg_saadc_reading = 0;
+        uint16_t   total_size = 15;
+        uint32_t   avg_saadc_reading = 0;
         // Byte array to store total packet
-        //uint8_t* total_packet;
+        uint8_t total_packet[] = {48,48,48,48,44,    /* pH value, comma */
+                                  48,48,48,48,44,    /* Temperature, comma */
+                                  48,48,48,48,10};   /* Battery value, EOL */
 
         err_code = nrf_drv_saadc_buffer_convert(p_event->data.done.p_buffer, 
                                                             SAMPLES_IN_BUFFER); 
@@ -1034,7 +894,7 @@ static inline void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
         avg_saadc_reading = avg_saadc_reading/(SAMPLES_IN_BUFFER - 1); 
         // If ph has not been read, read it then restart SAADC to read temp
         if (!PH_IS_READ) {
-            AVG_PH_VAL = avg_saadc_reading;
+            AVG_PH_VAL = saadc_result_to_mv(avg_saadc_reading);
             PH_IS_READ = true;
             // Uninit saadc peripheral, restart saadc, enable sampling event
             NRF_LOG_INFO("read pH val, restarting: %d", AVG_PH_VAL);
@@ -1043,7 +903,7 @@ static inline void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
         } 
         // If pH has been read but not battery, read battery then restart
         else if (!(PH_IS_READ && BATTERY_IS_READ)) {
-            AVG_BATT_VAL = avg_saadc_reading;
+            AVG_BATT_VAL = saadc_result_to_mv(avg_saadc_reading);
             NRF_LOG_INFO("read batt val, restarting: %d", AVG_BATT_VAL);
             NRF_LOG_FLUSH();
             BATTERY_IS_READ = true;
@@ -1051,17 +911,29 @@ static inline void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
         }
         // Once temp, batter and ph have been read, create and send data in packet
         else {
-            AVG_TEMP_VAL = avg_saadc_reading;
-            NRF_LOG_INFO("read temp val, restarting: %d", AVG_TEMP_VAL);
+            AVG_TEMP_VAL = saadc_result_to_mv(avg_saadc_reading);
+            NRF_LOG_INFO("read temp val: %d", AVG_TEMP_VAL);
             NRF_LOG_FLUSH();
-            // Convert pH number to appropriate byte array
-            total_packet = create_bluetooth_packet((uint32_t)AVG_PH_VAL, 
-                                                   (uint32_t)AVG_BATT_VAL,
-                                                   (uint32_t)AVG_TEMP_VAL, 
-                                                   total_packet, &total_size);
-            
+  
+            // Create bluetooth data
+            create_bluetooth_packet(AVG_PH_VAL, AVG_BATT_VAL, 
+                                    AVG_TEMP_VAL, total_packet);
+
+            // Send data
+            err_code = ble_nus_data_send(&m_nus, total_packet, 
+                                         &total_size, m_conn_handle);
+            //APP_ERROR_CHECK(err_code);
+            // reset global control boolean
+            PH_IS_READ = false;
+            BATTERY_IS_READ = false;
+ 
+            // Turn off peripherals
+            NRF_LOG_INFO("BLUETOOTH DATA SENT\n");
+            NRF_LOG_FLUSH();
             disable_pH_voltage_reading();
-            advertising_start();
+ 
+            NRF_LOG_INFO("SAADC DISABLED\n");
+            NRF_LOG_FLUSH();
         }
     }
 }
@@ -1127,6 +999,7 @@ static inline void enable_pH_voltage_reading(void)
     saadc_init();
     saadc_sampling_event_init();
     saadc_sampling_event_enable();
+    nrf_pwr_mgmt_run();
 }
 
 /* Function unitializes and disables SAADC sampling, restarts 1 second timer
@@ -1141,11 +1014,12 @@ static inline void disable_pH_voltage_reading(void)
     disable_analog_pin();
 
     // Restart timer
-    //ret_code_t err_code;
-    //err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(1000), NULL);
-    //APP_ERROR_CHECK(err_code);
+    ret_code_t err_code;
+    err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(1500), NULL);
+    APP_ERROR_CHECK(err_code);
+    nrf_pwr_mgmt_run();
 
-    NRF_LOG_INFO("SAADC and analog circuit diasbled (disable_ph_voltage_reading)\n");
+    NRF_LOG_INFO("TIMER RESTARTED (disable_ph_voltage_reading)\n");
     NRF_LOG_FLUSH();
 }
 
@@ -1157,26 +1031,10 @@ static inline void single_shot_timer_handler()
 
     // Delay to ensure appropriate timing between
     enable_analog_circuit();       
+    // PWM output, ISFET capacitor, etc
     nrf_delay_us(2000);              
     // Begin SAADC initialization/start
-    //enable_pH_voltage_reading();
-    advertising_start();
-}
-
-void disconnect_restart_timer()
-{
-        ret_code_t err_code;
-        err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-        APP_ERROR_CHECK(err_code);
-
-        // 1 second timer intervals
-        err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(10000), NULL);
-        APP_ERROR_CHECK(err_code);
-
-        NRF_LOG_INFO("TIMER STARTED\n");
-        NRF_LOG_FLUSH();
-
-        nrf_pwr_mgmt_run();
+    enable_pH_voltage_reading();
 }
 
 /**@brief Function for handling events from the GATT library. */
@@ -1185,15 +1043,29 @@ void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
     if ((m_conn_handle == p_evt->conn_handle) && 
         (p_evt->evt_id == NRF_BLE_GATT_EVT_ATT_MTU_UPDATED))
     {
-        NRF_LOG_INFO("CONNECTED gatt_evt_handler \n");
-        NRF_LOG_FLUSH();
         m_ble_nus_max_data_len = p_evt->params.att_mtu_effective - OPCODE_LENGTH 
                                                                 - HANDLE_LENGTH;
-        send_data_and_restart();    
+        NRF_LOG_INFO("Data len is set to 0x%X(%d)", m_ble_nus_max_data_len, 
+                                                    m_ble_nus_max_data_len);
     }
     NRF_LOG_DEBUG("ATT MTU exchange completed. central 0x%x peripheral 0x%x",
                   p_gatt->att_mtu_desired_central,
                   p_gatt->att_mtu_desired_periph);
+
+    ret_code_t err_code;
+
+    // Create application timer
+    err_code = app_timer_create(&m_timer_id,
+                                APP_TIMER_MODE_SINGLE_SHOT,
+                                single_shot_timer_handler);
+    APP_ERROR_CHECK(err_code);
+        
+    // 1 second timer intervals
+    err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(2000), NULL);
+    APP_ERROR_CHECK(err_code);
+
+    NRF_LOG_INFO("TIMER STARTED (gatt_evt_handler) \n");
+    NRF_LOG_FLUSH();
 }
 
 /**@brief Function for initializing the GATT library. */
@@ -1209,102 +1081,13 @@ void gatt_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
-void full_ble_stack_init()
-{
-    uart_init();
-    timers_init();
-    power_management_init();
-    ble_stack_init();
-    gap_params_init();
-    gatt_init();
-    services_init();
-    advertising_init();
-    conn_params_init();
-}
-
-/** @brief: Function for handling the RTC0 interrupts.
- * Triggered on TICK and COMPARE0 match.
- */
-static void rtc_handler(nrf_drv_rtc_int_type_t int_type)
-{
-    //NRF_LOG_INFO("in rtc handler\n");
-    NRF_LOG_FLUSH();
-    if (int_type == NRF_DRV_RTC_INT_COMPARE0)
-    {
-        NRF_LOG_INFO("Compare event registered, starting to advertise\n");
-        advertising_start();
-    }
-}
-
-/** @brief Function starting the internal LFCLK XTAL oscillator.
- */
-static void lfclk_config(void)
-{
-    //ret_code_t err_code = nrf_drv_clock_init();
-    //APP_ERROR_CHECK(err_code);
-
-    nrf_drv_clock_lfclk_request(NULL);
-}
-
-/** @brief Function initialization and configuration of RTC driver instance.
- */
-static void rtc_config(void)
-{
-    uint32_t err_code;
-
-    //Initialize RTC instance
-    nrf_drv_rtc_config_t config = NRF_DRV_RTC_DEFAULT_CONFIG;
-    config.prescaler = 4095;
-    err_code = nrf_drv_rtc_init(&rtc, &config, rtc_handler);
-    APP_ERROR_CHECK(err_code);
-
-    //Enable tick event & interrupt
-    nrf_drv_rtc_tick_enable(&rtc,true);
-
-    //Set compare channel to trigger interrupt after COMPARE_COUNTERTIME seconds
-    err_code = nrf_drv_rtc_cc_set(&rtc,0,COMPARE_COUNTERTIME * 8,true);
-    APP_ERROR_CHECK(err_code);
-
-    //Power on RTC instance
-    nrf_drv_rtc_enable(&rtc);
-}
-
-void send_data_and_restart()
-{
-    ret_code_t err_code;
-    while (ble_nus_data_send(&m_nus, total_packet, 
-                             &total_size, m_conn_handle) != NRF_SUCCESS) 
-    
-    {
-        NRF_LOG_INFO("waiting for nus data send to not be an error\n");
-        NRF_LOG_INFO("packet: %c", total_packet[10]);
-        NRF_LOG_INFO("size: %u \n", total_size);
-        NRF_LOG_FLUSH();
-    }
-    APP_ERROR_CHECK(err_code);
-    // reset global control boolean
-    PH_IS_READ = false;
-    BATTERY_IS_READ = false;
-    // Free dynamic array
-    free(total_packet);
-    // Turn off peripherals
-    NRF_LOG_INFO("BLUETOOTH DATA SENT\n");
-    NRF_LOG_FLUSH();
-    // Disconnect from central
-    disconnect_restart_timer();
-}
-
 /**@brief Application main function.
  */
 int main(void)
 {
-    uint32_t err_code;
+    bool erase_bonds = false;
 
-    // Init log and bluetooth stack
     log_init();
-    //full_ble_stack_init();
-
-    uart_init();
     timers_init();
     power_management_init();
     ble_stack_init();
@@ -1313,28 +1096,15 @@ int main(void)
     services_init();
     advertising_init();
     conn_params_init();
-      
-    // Create application timer
-    err_code = app_timer_create(&m_timer_id,
-                                APP_TIMER_MODE_SINGLE_SHOT,
-                                single_shot_timer_handler);
-    APP_ERROR_CHECK(err_code);
-
-    // Init SAADC, enable pH voltage reading
-    enable_analog_circuit();
-    enable_pH_voltage_reading();
-}
-
-/**
- * @}
- */
-
-/*
- * Removed from main:
-
-     while (true)
+    peer_manager_init();
+    advertising_start(erase_bonds);
+    // Enter main loop.
+    while (true)
     {
         idle_state_handle();
     } 
-  *
-  */
+}
+
+/*
+ * @}
+ */
