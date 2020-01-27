@@ -539,6 +539,16 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
             CONNECTION_MADE = false;
             NRF_LOG_INFO("DISCONNECTED, BLE_GAP_EVT_DISCONNECTED\n");
+
+            err_code = app_timer_stop(m_timer_id);
+            APP_ERROR_CHECK(err_code);
+            nrfx_timer_uninit(&m_timer);
+            nrfx_ppi_channel_free(m_ppi_channel);
+            nrfx_saadc_uninit();
+
+            // *** DISABLE ENABLE ***
+            disable_analog_pin();
+
             break;
 
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
