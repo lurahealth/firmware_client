@@ -111,7 +111,7 @@
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define DEVICE_NAME                     "Lura_Health"                               /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "Lura_Health_Client"                               /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
@@ -184,14 +184,22 @@ static ble_uuid_t m_adv_uuids[]          =                                      
 uint32_t AVG_PH_VAL        = 0;
 uint32_t AVG_BATT_VAL      = 0;
 uint32_t AVG_TEMP_VAL      = 0;
+uint16_t   total_size = 15;
 bool      PH_IS_READ       = false;
 bool      BATTERY_IS_READ  = false;
 bool      SAADC_CALIBRATED = false;
 bool      CONNECTION_MADE  = false;
 
+
 static const nrf_drv_timer_t   m_timer = NRF_DRV_TIMER_INSTANCE(1);
 static       nrf_saadc_value_t m_buffer_pool[1][SAMPLES_IN_BUFFER];
 static       nrf_ppi_channel_t m_ppi_channel;
+
+
+// Byte array to store total packet
+uint8_t total_packet[] = {48,48,48,48,44,    /* pH value, comma */
+                          48,48,48,48,44,    /* Temperature, comma */
+                          48,48,48,48,10};   /* Battery value, EOL */
 
 
 // Forward declarations
@@ -260,6 +268,43 @@ static void pm_evt_handler(pm_evt_t const * p_evt)
             pm_conn_sec_config_t conn_sec_config = {.allow_repairing = true};
             pm_conn_sec_config_reply(p_evt->conn_handle, &conn_sec_config);
         } break;
+
+        /* * * * ALL ABOVE CASES ARE NEEDED, BELOW ARE FOR TESTING * * */
+
+        case PM_EVT_CONN_SEC_START:
+            NRF_LOG_INFO("PM_EVT_CONN_SEC_START\n");
+            NRF_LOG_FLUSH();
+            break;
+
+        case PM_EVT_CONN_SEC_FAILED:
+            NRF_LOG_INFO("PM_EVT_CONN_SEC_FAILED\n");
+            NRF_LOG_FLUSH();
+            break;
+
+         case PM_EVT_CONN_SEC_PARAMS_REQ:
+            NRF_LOG_INFO("PM_EVT_CONN_SEC_PARAMS_REQ\n");
+            NRF_LOG_FLUSH();
+            break;
+
+         case PM_EVT_STORAGE_FULL:
+            NRF_LOG_INFO("PM_EVT_STORAGE_FULL\n");
+            NRF_LOG_FLUSH();
+            break;
+
+        case PM_EVT_ERROR_UNEXPECTED:
+            NRF_LOG_INFO("PM_EVT_ERROR_UNEXPECTED\n");
+            NRF_LOG_FLUSH();
+            break;
+
+        case PM_EVT_PEER_DATA_UPDATE_SUCCEEDED:
+            NRF_LOG_INFO("PM_EVT_PEER_DATA_UPDATE_SUCCEEDED\n");
+            NRF_LOG_FLUSH();
+            break;
+
+       case PM_EVT_PEER_DATA_UPDATE_FAILED:
+            NRF_LOG_INFO("PM_EVT_PEER_DATA_UPDATE_FAILED\n");
+            NRF_LOG_FLUSH();
+            break;
 
         default:
             NRF_LOG_INFO("PM DEFAULT CASE\n");
@@ -607,6 +652,11 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             NRF_LOG_FLUSH();
             break;
 
+        case BLE_GAP_EVT_PHY_UPDATE:
+            NRF_LOG_INFO("BLE_GAP_EVT_PHY_UPDATE, procedure finished\n");
+            NRF_LOG_FLUSH();
+            break;
+
         default:
             // No implementation needed.
             NRF_LOG_INFO("ble_evt_handler default case\n");
@@ -773,7 +823,10 @@ static void advertising_start(bool erase_bonds)
     else
     {
         ret_code_t err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
-
+        if (err_code == NRF_ERROR_INVALID_STATE) {
+            NRF_LOG_INFO("INVALID STATE FAM ******\n");
+            NRF_LOG_FLUSH();
+        }
         APP_ERROR_CHECK(err_code);
     }
     NRF_LOG_INFO("advertising_start finished\n");
@@ -950,12 +1003,7 @@ static inline void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
         NRF_LOG_FLUSH();
 
         ret_code_t err_code;
-        uint16_t   total_size = 15;
         uint32_t   avg_saadc_reading = 0;
-        // Byte array to store total packet
-        uint8_t total_packet[] = {48,48,48,48,44,    /* pH value, comma */
-                                  48,48,48,48,44,    /* Temperature, comma */
-                                  48,48,48,48,10};   /* Battery value, EOL */
 
         err_code = nrf_drv_saadc_buffer_convert(p_event->data.done.p_buffer, 
                                                             SAMPLES_IN_BUFFER); 
@@ -997,22 +1045,16 @@ static inline void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
             // Create bluetooth data
             create_bluetooth_packet(AVG_PH_VAL, AVG_BATT_VAL, 
                                     AVG_TEMP_VAL, total_packet);
-
-            // Send data
-            err_code = ble_nus_data_send(&m_nus, total_packet, 
-                                         &total_size, m_conn_handle);
-            //APP_ERROR_CHECK(err_code);
-            // reset global control boolean
-            PH_IS_READ = false;
-            BATTERY_IS_READ = false;
- 
-            // Turn off peripherals
-            NRF_LOG_INFO("BLUETOOTH DATA SENT inside saadc_callback\n");
-            NRF_LOG_FLUSH();
+            
+            // Disable pH voltage reading
             disable_pH_voltage_reading();
  
             NRF_LOG_INFO("SAADC_CALLBACK finished\n");
             NRF_LOG_FLUSH();
+
+
+            // Begin advertising
+            advertising_start(false);
         }
     }
 }
@@ -1109,15 +1151,6 @@ static inline void disable_pH_voltage_reading(void)
 
     // *** DISABLE ENABLE ***
     disable_analog_pin();
-
-    // Restart timer
-    ret_code_t err_code;
-    err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(1500), NULL);
-    APP_ERROR_CHECK(err_code);
-    nrf_pwr_mgmt_run();
-
-    NRF_LOG_INFO("APP TIMER RESTARTED m_timer_id (disable_ph_voltage_reading)\n");
-    NRF_LOG_FLUSH();
 }
 
 static inline void single_shot_timer_handler()
@@ -1134,7 +1167,7 @@ static inline void single_shot_timer_handler()
     // Delay to ensure appropriate timing between
     enable_analog_circuit();       
     // PWM output, ISFET capacitor, etc
-    nrf_delay_us(2000);              
+    nrf_delay_ms(10);              
     // Begin SAADC initialization/start
     enable_pH_voltage_reading();
 
@@ -1157,19 +1190,41 @@ void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
                   p_gatt->att_mtu_desired_central,
                   p_gatt->att_mtu_desired_periph);
 
+    // Send data
     ret_code_t err_code;
 
-    // Create application timer
-    err_code = app_timer_create(&m_timer_id,
-                                APP_TIMER_MODE_SINGLE_SHOT,
-                                single_shot_timer_handler);
-    APP_ERROR_CHECK(err_code);
-        
-    // 1 second timer intervals
-    err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(2000), NULL);
-    APP_ERROR_CHECK(err_code);
+    // Send data
+    do
+      {
+         err_code = ble_nus_data_send(&m_nus, total_packet, 
+                                      &total_size, m_conn_handle);
+         if ((err_code != NRF_ERROR_INVALID_STATE) &&
+             (err_code != NRF_ERROR_RESOURCES) &&
+             (err_code != NRF_ERROR_NOT_FOUND))
+         {
+                APP_ERROR_CHECK(err_code);              
+         }
+      } while (err_code == NRF_ERROR_RESOURCES);
 
-    NRF_LOG_INFO("APP TIMER STARTED, m_timer_id (gatt_evt_handler) \n");
+    // reset global control boolean
+    PH_IS_READ = false;
+    BATTERY_IS_READ = false;
+ 
+    // Turn off peripherals
+    NRF_LOG_INFO("BLUETOOTH DATA SENT\n");
+    NRF_LOG_FLUSH();
+
+    // Disconnect from central device
+    err_code = sd_ble_gap_disconnect(m_conn_handle, 
+                                     BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+    m_conn_handle = BLE_CONN_HANDLE_INVALID;
+
+    // Restart timer
+    err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(10000), NULL);
+    APP_ERROR_CHECK(err_code);
+    nrf_pwr_mgmt_run();
+
+    NRF_LOG_INFO("APP TIMER RESTARTED m_timer_id (disable_ph_voltage_reading)\n");
     NRF_LOG_FLUSH();
 }
 
@@ -1184,6 +1239,24 @@ void gatt_init(void)
     err_code = nrf_ble_gatt_att_mtu_periph_set(&m_gatt, 
                                                NRF_SDH_BLE_GATT_MAX_MTU_SIZE);
     APP_ERROR_CHECK(err_code);
+}
+
+void init_and_start_app_timer()
+{
+    ret_code_t err_code;
+
+    // Create application timer
+    err_code = app_timer_create(&m_timer_id,
+                                APP_TIMER_MODE_SINGLE_SHOT,
+                                single_shot_timer_handler);
+    APP_ERROR_CHECK(err_code);
+        
+    // 1 second timer intervals
+    err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(10), NULL);
+    APP_ERROR_CHECK(err_code);
+
+    NRF_LOG_INFO("APP TIMER STARTED, m_timer_id (gatt_evt_handler) \n");
+    NRF_LOG_FLUSH();
 }
 
 /**@brief Application main function.
@@ -1202,12 +1275,8 @@ int main(void)
     advertising_init();
     conn_params_init();
     peer_manager_init();
-    advertising_start(erase_bonds);
-    // Enter main loop.
-//    while (true)
-//    {
-//        idle_state_handle();
-//    } 
+
+    init_and_start_app_timer();
 }
 
 /*
