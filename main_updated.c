@@ -111,17 +111,17 @@
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define DEVICE_NAME                     "Lura_Health_Client"                               /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "Lura_Health_Client"                        /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 
 #define APP_ADV_INTERVAL                200                                         /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
 
-#define APP_ADV_DURATION                300                                         /**< The advertising duration (3 seconds) in units of 10 milliseconds. */
+#define APP_ADV_DURATION                18000                                       /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
 
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (200 ms), Connection interval uses 1.25 ms units. */
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)            /**< Maximum acceptable connection interval (200 ms), Connection interval uses 1.25 ms units. */
 #define SLAVE_LATENCY                   0                                           /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000)                       /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
@@ -184,11 +184,11 @@ static ble_uuid_t m_adv_uuids[]          =                                      
 uint32_t AVG_PH_VAL        = 0;
 uint32_t AVG_BATT_VAL      = 0;
 uint32_t AVG_TEMP_VAL      = 0;
-uint16_t   total_size = 15;
-bool      PH_IS_READ       = false;
-bool      BATTERY_IS_READ  = false;
-bool      SAADC_CALIBRATED = false;
-bool      CONNECTION_MADE  = false;
+uint16_t total_size 	   = 15;
+bool     PH_IS_READ        = false;
+bool     BATTERY_IS_READ   = false;
+bool     SAADC_CALIBRATED  = false;
+bool     CONNECTION_MADE   = false;
 
 
 static const nrf_drv_timer_t   m_timer = NRF_DRV_TIMER_INSTANCE(1);
@@ -211,6 +211,7 @@ static inline void saadc_init                 (void);
 static inline void enable_analog_pin          (void);
 static inline void disable_analog_pin         (void);
 static        void advertising_start          (bool erase_bonds);
+              void send_data_and_disconnect   (void);
 
 
 /**@brief Function for assert macro callback.
@@ -250,7 +251,7 @@ static void pm_evt_handler(pm_evt_t const * p_evt)
             break;
 
         case PM_EVT_PEERS_DELETE_SUCCEEDED:
-            NRF_LOG_INFO("PM_EVT_CONN_SEC_SUCCEEDED\n");
+            NRF_LOG_INFO("PM_EVT_PEERS_DELETED_SUCCEEDED\n");
             NRF_LOG_FLUSH();            
             advertising_start(false);
             break;
@@ -297,12 +298,25 @@ static void pm_evt_handler(pm_evt_t const * p_evt)
             break;
 
         case PM_EVT_PEER_DATA_UPDATE_SUCCEEDED:
-            NRF_LOG_INFO("PM_EVT_PEER_DATA_UPDATE_SUCCEEDED\n");
+            NRF_LOG_INFO("****** PM_EVT_PEER_DATA_UPDATE_SUCCEEDED *****");
             NRF_LOG_FLUSH();
+
+            NRF_LOG_INFO("data_id: %d\n", p_evt->params.peer_data_update_succeeded.data_id);
+            NRF_LOG_FLUSH();
+
+            if (p_evt->params.peer_data_update_succeeded.data_id == 8) {
+                send_data_and_disconnect();
+            }
+            
             break;
 
        case PM_EVT_PEER_DATA_UPDATE_FAILED:
             NRF_LOG_INFO("PM_EVT_PEER_DATA_UPDATE_FAILED\n");
+            NRF_LOG_FLUSH();
+            break;
+
+       case PM_EVT_LOCAL_DB_CACHE_APPLIED:
+            NRF_LOG_INFO("PM_EVT_LOCAL_DB_CACHE_APPLIED\n");
             NRF_LOG_FLUSH();
             break;
 
@@ -511,14 +525,16 @@ static void conn_params_init(void)
 /**@brief Function for putting the chip into sleep mode.
  *
  * @note This function will not return.
+ * 
+ * TO DO: Implement later
  */
 static void sleep_mode_enter(void)
 {
-    uint32_t err_code; 
+    // uint32_t err_code; 
 
     // Go to system-off mode (function will not return; wakeup causes reset).
     //err_code = sd_power_system_off();
-    APP_ERROR_CHECK(err_code);
+    // APP_ERROR_CHECK(err_code);
 }
 
 
@@ -604,9 +620,18 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
                 .rx_phys = BLE_GAP_PHY_AUTO,
                 .tx_phys = BLE_GAP_PHY_AUTO,
             };
-            err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, 
-                                                                         &phys);
-            APP_ERROR_CHECK(err_code);
+
+        do
+          {
+            err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, &phys);
+            if ((err_code != NRF_ERROR_INVALID_STATE) &&
+                (err_code != NRF_ERROR_RESOURCES) &&
+                (err_code != NRF_ERROR_NOT_FOUND) &&
+                (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING))
+            {
+                  APP_ERROR_CHECK(err_code);    
+            }
+      } while (err_code == NRF_ERROR_RESOURCES);
 
             NRF_LOG_INFO("BLE_GAP_EVT_PHY_UPDATE_REQUEST\n");
             NRF_LOG_FLUSH();
@@ -1160,6 +1185,7 @@ static inline void single_shot_timer_handler()
     // disable timer
     ret_code_t err_code;
     err_code = app_timer_stop(m_timer_id);
+    APP_ERROR_CHECK(err_code);
     
     NRF_LOG_INFO("m_timer_id stopped, inside single shot timer handler\n");
     NRF_LOG_FLUSH();
@@ -1173,6 +1199,14 @@ static inline void single_shot_timer_handler()
 
     NRF_LOG_INFO("single_shot_timer_handler finished\n");
     NRF_LOG_FLUSH();
+}
+
+void reset_bluetooth_packet()
+{
+    // Byte array to store total packet
+    uint8_t total_packet[] = {48,48,48,48,44,    /* pH value, comma */
+                              48,48,48,48,44,    /* Temperature, comma */
+                              48,48,48,48,10};   /* Battery value, EOL */
 }
 
 /**@brief Function for handling events from the GATT library. */
@@ -1189,43 +1223,6 @@ void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
     NRF_LOG_DEBUG("ATT MTU exchange completed. central 0x%x peripheral 0x%x",
                   p_gatt->att_mtu_desired_central,
                   p_gatt->att_mtu_desired_periph);
-
-    // Send data
-    ret_code_t err_code;
-
-    // Send data
-    do
-      {
-         err_code = ble_nus_data_send(&m_nus, total_packet, 
-                                      &total_size, m_conn_handle);
-         if ((err_code != NRF_ERROR_INVALID_STATE) &&
-             (err_code != NRF_ERROR_RESOURCES) &&
-             (err_code != NRF_ERROR_NOT_FOUND))
-         {
-                APP_ERROR_CHECK(err_code);              
-         }
-      } while (err_code == NRF_ERROR_RESOURCES);
-
-    // reset global control boolean
-    PH_IS_READ = false;
-    BATTERY_IS_READ = false;
- 
-    // Turn off peripherals
-    NRF_LOG_INFO("BLUETOOTH DATA SENT\n");
-    NRF_LOG_FLUSH();
-
-    // Disconnect from central device
-    err_code = sd_ble_gap_disconnect(m_conn_handle, 
-                                     BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-    m_conn_handle = BLE_CONN_HANDLE_INVALID;
-
-    // Restart timer
-    err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(10000), NULL);
-    APP_ERROR_CHECK(err_code);
-    nrf_pwr_mgmt_run();
-
-    NRF_LOG_INFO("APP TIMER RESTARTED m_timer_id (disable_ph_voltage_reading)\n");
-    NRF_LOG_FLUSH();
 }
 
 /**@brief Function for initializing the GATT library. */
@@ -1259,6 +1256,63 @@ void init_and_start_app_timer()
     NRF_LOG_FLUSH();
 }
 
+void send_data_and_disconnect(void)
+{
+    // Send data
+    ret_code_t err_code;
+    int debug_ctr = 0;
+  
+    // Send data
+    do
+      {
+         err_code = ble_nus_data_send(&m_nus, total_packet, 
+                                      &total_size, m_conn_handle);
+         debug_ctr++;
+         if ((err_code != NRF_ERROR_INVALID_STATE) &&
+             (err_code != NRF_ERROR_RESOURCES) &&
+             (err_code != NRF_ERROR_NOT_FOUND) &&
+             (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING))
+         {
+                APP_ERROR_CHECK(err_code);    
+         }
+      } while (err_code == NRF_ERROR_RESOURCES);
+
+    NRF_LOG_INFO("***\nnus_data_send called %d times\n***\n", debug_ctr);
+    NRF_LOG_FLUSH();
+
+    // reset global control boolean
+    PH_IS_READ = false;
+    BATTERY_IS_READ = false;
+
+    for (int i = 0; i < 15; i++) {
+        NRF_LOG_INFO("packet[%d]: %u", i, total_packet[i]);
+    }
+  
+    NRF_LOG_FLUSH();
+    // Reset bluetooth packet to all 0's
+    reset_bluetooth_packet();
+ 
+    // Turn off peripherals
+    NRF_LOG_INFO("BLUETOOTH DATA SENT\n");
+    NRF_LOG_FLUSH();
+    
+    nrf_delay_ms(2000);
+
+    // Disconnect from central device
+    err_code = sd_ble_gap_disconnect(m_conn_handle, 
+                                     BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+    m_conn_handle = BLE_CONN_HANDLE_INVALID;
+    APP_ERROR_CHECK(err_code);
+
+    // Restart timer
+    err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(10000), NULL);
+    APP_ERROR_CHECK(err_code);
+    nrf_pwr_mgmt_run();
+
+    NRF_LOG_INFO("APP TIMER RESTARTED\n");
+    NRF_LOG_FLUSH();
+}
+
 /**@brief Application main function.
  */
 int main(void)
@@ -1277,9 +1331,6 @@ int main(void)
     peer_manager_init();
 
     init_and_start_app_timer();
-
-    for(;;)
-      idle_state_handle();
 }
 
 /*
