@@ -1,0 +1,216 @@
+114c114
+< #define DEVICE_NAME                     "Lura_Health_Client"                               /**< Name of device. Will be included in the advertising data. */
+---
+> #define DEVICE_NAME                     "Lura_Health_Client"                        /**< Name of device. Will be included in the advertising data. */
+121c121
+< #define APP_ADV_DURATION                1000                                         /**< The advertising duration (3 seconds) in units of 10 milliseconds. */
+---
+> #define APP_ADV_DURATION                18000                                       /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
+124c124
+< #define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (200 ms), Connection interval uses 1.25 ms units. */
+---
+> #define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)            /**< Maximum acceptable connection interval (200 ms), Connection interval uses 1.25 ms units. */
+187,191c187,191
+< uint16_t   total_size = 15;
+< bool      PH_IS_READ       = false;
+< bool      BATTERY_IS_READ  = false;
+< bool      SAADC_CALIBRATED = false;
+< bool      CONNECTION_MADE  = false;
+---
+> uint16_t total_size 	   = 15;
+> bool     PH_IS_READ        = false;
+> bool     BATTERY_IS_READ   = false;
+> bool     SAADC_CALIBRATED  = false;
+> bool     CONNECTION_MADE   = false;
+213a214
+>               void send_data_and_disconnect   (void);
+253c254
+<             NRF_LOG_INFO("PM_EVT_CONN_SEC_SUCCEEDED\n");
+---
+>             NRF_LOG_INFO("PM_EVT_PEERS_DELETED_SUCCEEDED\n");
+300c301,304
+<             NRF_LOG_INFO("PM_EVT_PEER_DATA_UPDATE_SUCCEEDED\n");
+---
+>             NRF_LOG_INFO("****** PM_EVT_PEER_DATA_UPDATE_SUCCEEDED *****");
+>             NRF_LOG_FLUSH();
+> 
+>             NRF_LOG_INFO("data_id: %d\n", p_evt->params.peer_data_update_succeeded.data_id);
+301a306,310
+> 
+>             if (p_evt->params.peer_data_update_succeeded.data_id == 8) {
+>                 send_data_and_disconnect();
+>             }
+>             
+308a318,322
+>        case PM_EVT_LOCAL_DB_CACHE_APPLIED:
+>             NRF_LOG_INFO("PM_EVT_LOCAL_DB_CACHE_APPLIED\n");
+>             NRF_LOG_FLUSH();
+>             break;
+> 
+510a525,540
+> /**@brief Function for putting the chip into sleep mode.
+>  *
+>  * @note This function will not return.
+>  * 
+>  * TO DO: Implement later
+>  */
+> static void sleep_mode_enter(void)
+> {
+>     // uint32_t err_code; 
+> 
+>     // Go to system-off mode (function will not return; wakeup causes reset).
+>     //err_code = sd_power_system_off();
+>     // APP_ERROR_CHECK(err_code);
+> }
+> 
+> 
+530,536c560
+<             // Restart timer
+<             err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(10000), NULL);
+<             APP_ERROR_CHECK(err_code);
+<             nrf_pwr_mgmt_run();
+< 
+<             NRF_LOG_INFO("APP TIMER RESTARTED m_timer_id (ble adv event idle\n");
+<             NRF_LOG_FLUSH();
+---
+>             sleep_mode_enter();
+599,601c623,634
+<             err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, 
+<                                                                          &phys);
+<             APP_ERROR_CHECK(err_code);
+---
+> 
+>         do
+>           {
+>             err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, &phys);
+>             if ((err_code != NRF_ERROR_INVALID_STATE) &&
+>                 (err_code != NRF_ERROR_RESOURCES) &&
+>                 (err_code != NRF_ERROR_NOT_FOUND) &&
+>                 (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING))
+>             {
+>                   APP_ERROR_CHECK(err_code);    
+>             }
+>       } while (err_code == NRF_ERROR_RESOURCES);
+1154a1188
+>     APP_ERROR_CHECK(err_code);
+1169a1204,1211
+> void reset_bluetooth_packet()
+> {
+>     // Byte array to store total packet
+>     uint8_t total_packet[] = {48,48,48,48,44,    /* pH value, comma */
+>                               48,48,48,48,44,    /* Temperature, comma */
+>                               48,48,48,48,10};   /* Battery value, EOL */
+> }
+> 
+1183a1226
+> }
+1185c1228,1242
+<     // Send data
+---
+> /**@brief Function for initializing the GATT library. */
+> void gatt_init(void)
+> {
+>     ret_code_t err_code;
+> 
+>     err_code = nrf_ble_gatt_init(&m_gatt, gatt_evt_handler);
+>     APP_ERROR_CHECK(err_code);
+> 
+>     err_code = nrf_ble_gatt_att_mtu_periph_set(&m_gatt, 
+>                                                NRF_SDH_BLE_GATT_MAX_MTU_SIZE);
+>     APP_ERROR_CHECK(err_code);
+> }
+> 
+> void init_and_start_app_timer()
+> {
+1187a1245,1264
+>     // Create application timer
+>     err_code = app_timer_create(&m_timer_id,
+>                                 APP_TIMER_MODE_SINGLE_SHOT,
+>                                 single_shot_timer_handler);
+>     APP_ERROR_CHECK(err_code);
+>         
+>     // 1 second timer intervals
+>     err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(10), NULL);
+>     APP_ERROR_CHECK(err_code);
+> 
+>     NRF_LOG_INFO("APP TIMER STARTED, m_timer_id (gatt_evt_handler) \n");
+>     NRF_LOG_FLUSH();
+> }
+> 
+> void send_data_and_disconnect(void)
+> {
+>     // Send data
+>     ret_code_t err_code;
+>     int debug_ctr = 0;
+>   
+1192a1270
+>          debug_ctr++;
+1195c1273,1274
+<              (err_code != NRF_ERROR_NOT_FOUND))
+---
+>              (err_code != NRF_ERROR_NOT_FOUND) &&
+>              (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING))
+1197c1276
+<                 APP_ERROR_CHECK(err_code);              
+---
+>                 APP_ERROR_CHECK(err_code);    
+1200a1280,1282
+>     NRF_LOG_INFO("***\nnus_data_send called %d times\n***\n", debug_ctr);
+>     NRF_LOG_FLUSH();
+> 
+1203a1286,1293
+> 
+>     for (int i = 0; i < 15; i++) {
+>         NRF_LOG_INFO("packet[%d]: %u", i, total_packet[i]);
+>     }
+>   
+>     NRF_LOG_FLUSH();
+>     // Reset bluetooth packet to all 0's
+>     reset_bluetooth_packet();
+1208,1209c1298,1299
+< 
+<     nrf_delay_ms(10000);
+---
+>     
+>     nrf_delay_ms(2000);
+1214a1305
+>     APP_ERROR_CHECK(err_code);
+1221,1252c1312
+<     NRF_LOG_INFO("APP TIMER RESTARTED m_timer_id (gatt_evt_handler)\n");
+<     NRF_LOG_FLUSH();
+< }
+< 
+< /**@brief Function for initializing the GATT library. */
+< void gatt_init(void)
+< {
+<     ret_code_t err_code;
+< 
+<     err_code = nrf_ble_gatt_init(&m_gatt, gatt_evt_handler);
+<     APP_ERROR_CHECK(err_code);
+< 
+<     err_code = nrf_ble_gatt_att_mtu_periph_set(&m_gatt, 
+<                                                NRF_SDH_BLE_GATT_MAX_MTU_SIZE);
+<     APP_ERROR_CHECK(err_code);
+< }
+< 
+< void init_and_start_app_timer()
+< {
+<     ret_code_t err_code;
+< 
+<     // Create application timer
+<     err_code = app_timer_create(&m_timer_id,
+<                                 APP_TIMER_MODE_SINGLE_SHOT,
+<                                 single_shot_timer_handler);
+<     APP_ERROR_CHECK(err_code);
+<         
+<     // 1 second timer intervals
+<     err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(10), NULL);
+<     APP_ERROR_CHECK(err_code);
+< 
+<     NRF_LOG_INFO("APP TIMER STARTED, m_timer_id (gatt_evt_handler) \n");
+---
+>     NRF_LOG_INFO("APP TIMER RESTARTED\n");
+1274,1276d1333
+< 
+<     for(;;)
+<       idle_state_handle();

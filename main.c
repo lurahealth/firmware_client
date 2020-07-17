@@ -118,7 +118,7 @@
 
 #define APP_ADV_INTERVAL                200                                         /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
 
-#define APP_ADV_DURATION                300                                         /**< The advertising duration (3 seconds) in units of 10 milliseconds. */
+#define APP_ADV_DURATION                1000                                         /**< The advertising duration (3 seconds) in units of 10 milliseconds. */
 
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
 #define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (200 ms), Connection interval uses 1.25 ms units. */
@@ -508,20 +508,6 @@ static void conn_params_init(void)
 }
 
 
-/**@brief Function for putting the chip into sleep mode.
- *
- * @note This function will not return.
- */
-static void sleep_mode_enter(void)
-{
-    uint32_t err_code; 
-
-    // Go to system-off mode (function will not return; wakeup causes reset).
-    //err_code = sd_power_system_off();
-    APP_ERROR_CHECK(err_code);
-}
-
-
 /**@brief Function for handling advertising events.
  *
  * @details This function will be called for advertising events which are passed 
@@ -541,7 +527,13 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
         case BLE_ADV_EVT_FAST:
             break;
         case BLE_ADV_EVT_IDLE:
-            sleep_mode_enter();
+            // Restart timer
+            err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(10000), NULL);
+            APP_ERROR_CHECK(err_code);
+            nrf_pwr_mgmt_run();
+
+            NRF_LOG_INFO("APP TIMER RESTARTED m_timer_id (ble adv event idle\n");
+            NRF_LOG_FLUSH();
             break;
         default:
             break;
@@ -1214,6 +1206,8 @@ void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
     NRF_LOG_INFO("BLUETOOTH DATA SENT\n");
     NRF_LOG_FLUSH();
 
+    nrf_delay_ms(10000);
+
     // Disconnect from central device
     err_code = sd_ble_gap_disconnect(m_conn_handle, 
                                      BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
@@ -1224,7 +1218,7 @@ void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
     APP_ERROR_CHECK(err_code);
     nrf_pwr_mgmt_run();
 
-    NRF_LOG_INFO("APP TIMER RESTARTED m_timer_id (disable_ph_voltage_reading)\n");
+    NRF_LOG_INFO("APP TIMER RESTARTED m_timer_id (gatt_evt_handler)\n");
     NRF_LOG_FLUSH();
 }
 
