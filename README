@@ -1,4 +1,6 @@
-This application is to be used by Lura Health for laboratory test purposes. The applicatiion utilizes Nordic UART Service, advertises itself ar "Lura Health", and continually streams data until a connection is broken. When connection is terminated, the application will restart advertising.
+This application is to be used with the Lura Health mobile app. This application
+is based off of the Nordic UART Service example, and transmits one data packet
+at variable intervals.
 
 This application was built upon the UART Example. To build and run, place all files into SDK_ROOT/examples/ble_peripheral/_folder_name_, where _folder_name_ is the folder containing all files within this repository. 
 
