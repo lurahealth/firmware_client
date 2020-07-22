@@ -1,5 +1,5 @@
 Output/ble_app_uart_pca10040e_s112\ Release/Obj/auth_status_tracker.o: \
- /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/ble/peer_manager/auth_status_tracker.c \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/examples/ble_peripheral/LURA_TESTING_APP/pca10040e/s112/ses/auth_status_tracker.c \
  ../../../../../../components/libraries/util/sdk_common.h \
  /usr/share/segger_embedded_studio_for_arm_4.22/include/stdint.h \
  /usr/share/segger_embedded_studio_for_arm_4.22/include/stdbool.h \

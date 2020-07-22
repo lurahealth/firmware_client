@@ -52,6 +52,9 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <time.h>
+#include <stdlib.h>
+#include <math.h>
 #include "nordic_common.h"
 #include "boards.h"
 
@@ -71,7 +74,6 @@
 #include "nrf_drv_timer.h"
 
 #include "nrfx_ppi.h"
-#include "nrfx_pwm.h"
 #include "nrf_timer.h"
 #include "nrfx_saadc.h"
 
@@ -100,6 +102,10 @@
 #include "peer_manager_handler.h"
 #include "ble_conn_state.h"
 
+// Included for persisent flash reads/writes
+#include "fds.h"
+#include "nrf_fstorage.h"
+
 #if defined (UART_PRESENT)
 #include "nrf_uart.h"
 #endif
@@ -111,14 +117,14 @@
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define DEVICE_NAME                     "Lura_Health_Client"                               /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "Lura_Health_Test"                   /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 
-#define APP_ADV_INTERVAL                200                                         /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
+#define APP_ADV_INTERVAL                510                                         /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
 
-#define APP_ADV_DURATION                300                                         /**< The advertising duration (3 seconds) in units of 10 milliseconds. */
+#define APP_ADV_DURATION                18000                                       /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
 
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
 #define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (200 ms), Connection interval uses 1.25 ms units. */
@@ -142,7 +148,10 @@
 #define SEC_PARAM_MIN_KEY_SIZE          7                                           /**< Minimum encryption key size. */
 #define SEC_PARAM_MAX_KEY_SIZE          16                                          /**< Maximum encryption key size. */
 
-#define SAMPLES_IN_BUFFER               11                                          /**< SAADC buffer > */
+#define SAMPLES_IN_BUFFER               50                                          /**< SAADC buffer > */
+
+#define DATA_INTERVAL                   500
+
 
 #define NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(PIN_P) \
 {                                                   \
@@ -178,17 +187,45 @@ static ble_uuid_t m_adv_uuids[]          =                                      
 
 
 /* Lura Health nRF52810 port assignments */
-#define ENABLE_ANALOG_PIN 4
+#define ENABLE_ISFET_PIN 8
+#define CHIP_POWER_PIN   12
 
 /* GLOBALS */
 uint32_t AVG_PH_VAL        = 0;
 uint32_t AVG_BATT_VAL      = 0;
 uint32_t AVG_TEMP_VAL      = 0;
-uint16_t   total_size = 15;
-bool      PH_IS_READ       = false;
-bool      BATTERY_IS_READ  = false;
-bool      SAADC_CALIBRATED = false;
-bool      CONNECTION_MADE  = false;
+bool     PH_IS_READ        = false;
+bool     BATTERY_IS_READ   = false;
+bool     SAADC_CALIBRATED  = false;
+bool     CONNECTION_MADE   = false;
+bool     CAL_MODE          = false;
+bool     READ_CAL_DATA     = false;
+bool     PT1_READ          = false;
+bool     PT2_READ          = false;
+bool     PT3_READ          = false;
+double   PT1_PH_VAL        = 0;
+double   PT1_MV_VAL        = 0;
+double   PT2_PH_VAL        = 0;
+double   PT2_MV_VAL        = 0;
+double   PT3_PH_VAL        = 0;
+double   PT3_MV_VAL        = 0;
+int      NUM_CAL_PTS       = 0;
+float     MVAL_CALIBRATION  = 0;
+float     BVAL_CALIBRATION  = 0;
+float     RVAL_CALIBRATION  = 0;
+float     CAL_PERFORMED     = 0;
+static volatile uint8_t write_flag=0;
+
+/* Used for reading/writing calibration values to flash */
+#define MVAL_FILE_ID      0x1110
+#define MVAL_REC_KEY      0x1111
+#define BVAL_FILE_ID      0x2220
+#define BVAL_REC_KEY      0x2221
+#define RVAL_FILE_ID      0x3330
+#define RVAL_REC_KEY      0x3331
+#define CAL_DONE_FILE_ID  0x4440
+#define CAL_DONE_REC_KEY  0x4441
+
 
 
 static const nrf_drv_timer_t   m_timer = NRF_DRV_TIMER_INSTANCE(1);
@@ -196,21 +233,22 @@ static       nrf_saadc_value_t m_buffer_pool[1][SAMPLES_IN_BUFFER];
 static       nrf_ppi_channel_t m_ppi_channel;
 
 
-// Byte array to store total packet
-uint8_t total_packet[] = {48,48,48,48,44,    /* pH value, comma */
-                          48,48,48,48,44,    /* Temperature, comma */
-                          48,48,48,48,10};   /* Battery value, EOL */
-
-
 // Forward declarations
-static inline void enable_pH_voltage_reading  (void);
-static inline void enable_switch              (void);
-static inline void check_reed_switch          (void);
-static inline void disable_pH_voltage_reading (void);
-static inline void saadc_init                 (void);
-static inline void enable_analog_pin          (void);
-static inline void disable_analog_pin         (void);
-static        void advertising_start          (bool erase_bonds);
+void enable_pH_voltage_reading  (void);
+void disable_pH_voltage_reading (void);
+void saadc_init                 (void);
+void enable_isfet_circuit       (void);
+void disable_isfet_circuit      (void);
+void turn_chip_power_on         (void);
+void turn_chip_power_off         (void);
+void restart_saadc              (void);
+void restart_pH_interval_timer  (void);
+void write_cal_values_to_flash   (void);
+void linreg                     (int num, double x[], double y[]);
+void perform_calibration        (uint8_t cal_pts);
+double calculate_pH_from_mV     (uint32_t ph_val);
+static void advertising_start   (bool erase_bonds);
+uint32_t saadc_result_to_mv     (uint32_t saadc_result);
 
 
 /**@brief Function for assert macro callback.
@@ -230,101 +268,57 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
     app_error_handler(DEAD_BEEF, line_num, p_file_name);
 }
 
-
 /**@brief Function for handling Peer Manager events.
  *
  * @param[in] p_evt  Peer Manager event.
  */
 static void pm_evt_handler(pm_evt_t const * p_evt)
 {
-    NRF_LOG_INFO("ENTERED PM_EVT_HANDLER");
-    NRF_LOG_FLUSH();
+    //NRF_LOG_INFO("ENTERED PM_EVT_HANDLER\n");
+    //NRF_LOG_FLUSH();
     pm_handler_on_pm_evt(p_evt);
     pm_handler_flash_clean(p_evt);
 
     switch (p_evt->evt_id)
     {
         case PM_EVT_CONN_SEC_SUCCEEDED:
-            NRF_LOG_INFO("PM_EVT_CONN_SEC_SUCCEEDED\n");
+            NRF_LOG_INFO("PM_EVT_CONN_SEC_SUCCEEDED");
             NRF_LOG_FLUSH();
             break;
 
         case PM_EVT_PEERS_DELETE_SUCCEEDED:
-            NRF_LOG_INFO("PM_EVT_CONN_SEC_SUCCEEDED\n");
+            NRF_LOG_INFO("PM_EVT_PEERS_DELETE_SUCCEEDED");
             NRF_LOG_FLUSH();            
             advertising_start(false);
             break;
 
         case PM_EVT_BONDED_PEER_CONNECTED:  
-            NRF_LOG_INFO("PM_EVT_BONDED_PEER_CONNECTED\n");
+            NRF_LOG_INFO("PM_EVT_BONDED_PEER_CONNECTED");
             NRF_LOG_FLUSH();
             break;
 
         case PM_EVT_CONN_SEC_CONFIG_REQ:
         {
             // Allow pairing request from an already bonded peer.
-            NRF_LOG_INFO("PM_EVT_CONN_SEC_CONFIG_REQ\n");
+            NRF_LOG_INFO("PM_EVT_CONN_SEC_CONFIG_REQ");
             NRF_LOG_FLUSH();
             pm_conn_sec_config_t conn_sec_config = {.allow_repairing = true};
             pm_conn_sec_config_reply(p_evt->conn_handle, &conn_sec_config);
         } break;
 
-        /* * * * ALL ABOVE CASES ARE NEEDED, BELOW ARE FOR TESTING * * */
-
-        case PM_EVT_CONN_SEC_START:
-            NRF_LOG_INFO("PM_EVT_CONN_SEC_START\n");
-            NRF_LOG_FLUSH();
-            break;
-
-        case PM_EVT_CONN_SEC_FAILED:
-            NRF_LOG_INFO("PM_EVT_CONN_SEC_FAILED\n");
-            NRF_LOG_FLUSH();
-            break;
-
-         case PM_EVT_CONN_SEC_PARAMS_REQ:
-            NRF_LOG_INFO("PM_EVT_CONN_SEC_PARAMS_REQ\n");
-            NRF_LOG_FLUSH();
-            break;
-
-         case PM_EVT_STORAGE_FULL:
-            NRF_LOG_INFO("PM_EVT_STORAGE_FULL\n");
-            NRF_LOG_FLUSH();
-            break;
-
-        case PM_EVT_ERROR_UNEXPECTED:
-            NRF_LOG_INFO("PM_EVT_ERROR_UNEXPECTED\n");
-            NRF_LOG_FLUSH();
-            break;
-
-        case PM_EVT_PEER_DATA_UPDATE_SUCCEEDED:
-            NRF_LOG_INFO("PM_EVT_PEER_DATA_UPDATE_SUCCEEDED\n");
-            NRF_LOG_FLUSH();
-            break;
-
-       case PM_EVT_PEER_DATA_UPDATE_FAILED:
-            NRF_LOG_INFO("PM_EVT_PEER_DATA_UPDATE_FAILED\n");
-            NRF_LOG_FLUSH();
-            break;
-
         default:
-            NRF_LOG_INFO("PM DEFAULT CASE\n");
-            NRF_LOG_FLUSH();
             break;
     }
 }
 
 
-
 /**@brief Function for initializing the timer module.
  */
-static inline void timers_init(void)
+void timers_init(void)
 {
     uint32_t err_code;
     err_code = app_timer_init();
     APP_ERROR_CHECK(err_code);
-
-    NRF_LOG_INFO("app_timer_init finished\n");
-    NRF_LOG_FLUSH();
 }
 
 
@@ -334,7 +328,7 @@ static inline void timers_init(void)
  *          Profile) parameters of the device. It also sets the permissions 
  *          and appearance.
  */
-static inline void gap_params_init(void)
+void gap_params_init(void)
 {
     uint32_t                err_code;
     ble_gap_conn_params_t   gap_conn_params;
@@ -356,9 +350,6 @@ static inline void gap_params_init(void)
 
     err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
     APP_ERROR_CHECK(err_code);
-
-    NRF_LOG_INFO("gap params init finished\n");
-    NRF_LOG_FLUSH();
 }
 
 
@@ -374,6 +365,220 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
     APP_ERROR_HANDLER(nrf_error);
 }
 
+// Helper function
+void substring(char s[], char sub[], int p, int l) {
+   int c = 0;
+   
+   while (c < l) {
+      sub[c] = s[p+c-1];
+      c++;
+   }
+   sub[c] = '\0';
+}
+
+// Read saadc values for temperature, battery level, and pH to store for calibration
+void read_saadc_for_calibration(void) 
+{
+    int NUM_SAMPLES = 50;
+    nrf_saadc_value_t temp_val = 0;
+    ret_code_t err_code;
+    disable_pH_voltage_reading();
+    AVG_PH_VAL = 0;
+    READ_CAL_DATA = true;
+    PH_IS_READ = false;
+    // Make sure isfet circuit is enabled for saadc readings
+    enable_isfet_circuit();
+    nrf_delay_ms(10);
+    // Take saadc readings for pH, temp and battery
+    enable_pH_voltage_reading();
+    for (int i = 0; i < NUM_SAMPLES; i++) {
+      err_code = nrfx_saadc_sample_convert(0, &temp_val);
+      APP_ERROR_CHECK(err_code);
+      AVG_PH_VAL += saadc_result_to_mv(temp_val);
+    }
+    AVG_PH_VAL = AVG_PH_VAL / NUM_SAMPLES;
+    //NRF_LOG_INFO("averaged avg_ph_val: %u\n");
+    //NRF_LOG_FLUSH();
+    // Assign averaged readings to the correct calibration point
+    if(!PT1_READ){
+      PT1_MV_VAL = (double)AVG_PH_VAL;
+      PT1_READ   = true;
+    }
+    else if (PT1_READ && !PT2_READ){
+      PT2_MV_VAL = (double)AVG_PH_VAL;
+      PT2_READ = true;
+    }
+    else if (PT1_READ && PT2_READ && !PT3_READ){
+       PT3_MV_VAL = (double)AVG_PH_VAL;
+       PT3_READ = true;
+    }    
+    disable_pH_voltage_reading();
+}
+
+/* Helper function to clear calibration global state variables
+ */
+void reset_calibration_state()
+{
+    CAL_MODE        = false;
+    READ_CAL_DATA   = false;
+    CAL_PERFORMED   = 1.0;
+    PT1_READ        = false;
+    PT2_READ        = false;
+    PT3_READ        = false;
+    PH_IS_READ      = false;
+    BATTERY_IS_READ = false;
+}
+
+/*
+ * Use the values read from read_saadc_for_calibration to reset the M, B and R values
+ * to recalibrate accuracy of ISFET voltage output to pH value conversions
+ */
+void perform_calibration(uint8_t cal_pts)
+{
+  if (cal_pts == 1) {
+    // Compare mV for pH value to mV calculated for same pH with current M & B values,
+    // then adjust B value by the difference in mV values (shift intercept of line)
+    double incorrect_pH  = calculate_pH_from_mV((uint32_t)PT1_MV_VAL);
+    double cal_adjustment = PT1_PH_VAL - incorrect_pH;
+    BVAL_CALIBRATION = BVAL_CALIBRATION + cal_adjustment;
+    NRF_LOG_INFO("MVAL: " NRF_LOG_FLOAT_MARKER " \n", NRF_LOG_FLOAT(MVAL_CALIBRATION));
+    NRF_LOG_INFO("BVAL: " NRF_LOG_FLOAT_MARKER " \n", NRF_LOG_FLOAT(BVAL_CALIBRATION));
+    NRF_LOG_INFO("RVAL: " NRF_LOG_FLOAT_MARKER " \n", NRF_LOG_FLOAT(RVAL_CALIBRATION));
+    //NRF_LOG_INFO("incorrect: %d, pt1: %d, adjustment: %d, BVAL: %d\n", (int)incorrect_pH, (int)PT1_PH_VAL, (int)cal_adjustment, (int)(BVAL_CALIBRATION));
+
+  }
+  else if (cal_pts == 2) {
+    // Create arrays of pH value and corresponding mV values (change all line properties)
+    double x1 = PT1_MV_VAL;
+    double x2 = PT2_MV_VAL;
+    double y1 = PT1_PH_VAL;
+    double y2 = PT2_PH_VAL;
+    double x_vals[] = {x1, x2};
+    double y_vals[] = {y1, y2};
+    linreg(2, x_vals, y_vals);
+  }
+  else if (cal_pts == 3) {
+    // Create arrays of pH value and corresponding mV values (change all line properties)
+    double x1 = PT1_MV_VAL;
+    double x2 = PT2_MV_VAL;
+    double x3 = PT3_MV_VAL;
+    double y1 = PT1_PH_VAL;
+    double y2 = PT2_PH_VAL;
+    double y3 = PT3_PH_VAL;
+    double x_vals[] = {x1, x2, x3};
+    double y_vals[] = {y1, y2, y3};
+    linreg(3, x_vals, y_vals);
+  }
+}
+
+/*
+ * Checks packet contents to appropriately perform calibration
+ */
+void check_for_calibration(char **packet)
+{
+    // Possible Strings to be received by pH device
+    char *STARTCAL1 = "STARTCAL1";
+    char *STARTCAL2 = "STARTCAL2";
+    char *STARTCAL3 = "STARTCAL3";
+    char *PWROFF    = "PWROFF";
+    char *PT1       = "PT1";
+    char *PT2       = "PT2";
+    char *PT3       = "PT3";
+
+    // Possible strings to send to mobile application
+    char *CALBEGIN = "CALBEGIN";
+    char *PT1CONF  = "PT1CONF";
+    char *PT2CONF  = "PT2CONF";
+    char *PT3CONF  = "PT3CONF";
+
+    // Variables to hold sizes of strings for ble_nus_send function
+    uint16_t SIZE_BEGIN = 9;
+    uint16_t SIZE_CONF  = 8;
+
+    // Used for parsing out pH value from PT1_X.Y (etc) packets
+    char pH_val_substring[4];
+
+    uint32_t err_code;
+
+    if (strstr(*packet, PWROFF) != NULL){
+        nrfx_gpiote_out_clear(CHIP_POWER_PIN);
+    }
+
+    if (strstr(*packet, STARTCAL1) != NULL){
+        CAL_MODE = true;
+        NUM_CAL_PTS = 1;
+        // Make sure other processes are stopped and reset so calibration can occur
+        disable_pH_voltage_reading();
+        err_code = ble_nus_data_send(&m_nus, CALBEGIN, &SIZE_BEGIN, m_conn_handle);
+        APP_ERROR_CHECK(err_code);
+    }
+    else if (strstr(*packet, STARTCAL2) != NULL){
+        CAL_MODE = true;
+        NUM_CAL_PTS = 2;
+        // Make sure other processes are stopped and reset so calibration can occur
+        disable_pH_voltage_reading();
+        err_code = ble_nus_data_send(&m_nus, CALBEGIN, &SIZE_BEGIN, m_conn_handle);
+        APP_ERROR_CHECK(err_code);
+    }
+    else if (strstr(*packet, STARTCAL3) != NULL) {
+        CAL_MODE = true;
+        NUM_CAL_PTS = 3;
+        // Make sure other processes are stopped and reset so calibration can occur
+        disable_pH_voltage_reading();
+        err_code = ble_nus_data_send(&m_nus, CALBEGIN, &SIZE_BEGIN, m_conn_handle);
+        APP_ERROR_CHECK(err_code);
+    }
+
+    if (strstr(*packet, PT1) != NULL) {
+        // Parse out the pH value from the packet, will always be format "X.Y"
+        substring(*packet, pH_val_substring, 5, 3);
+        PT1_PH_VAL = atof(pH_val_substring);   
+
+        read_saadc_for_calibration();
+        err_code = ble_nus_data_send(&m_nus, PT1CONF, &SIZE_CONF, m_conn_handle);
+        APP_ERROR_CHECK(err_code);
+        // Restart normal data transmision once calibration is complete
+        if (NUM_CAL_PTS == 1) {
+          perform_calibration(1);
+          write_cal_values_to_flash();
+          reset_calibration_state();
+          restart_pH_interval_timer();
+        }
+    }
+    else if (strstr(*packet, PT2) != NULL) {
+        // Parse out the pH value from the packet, will always be format "X.Y"
+        substring(*packet, pH_val_substring, 5, 3);
+        PT2_PH_VAL = atof(pH_val_substring);
+        
+        read_saadc_for_calibration();
+        err_code = ble_nus_data_send(&m_nus, PT2CONF, &SIZE_CONF, m_conn_handle);
+        APP_ERROR_CHECK(err_code);
+        // Restart normal data transmision once calibration is complete
+        if (NUM_CAL_PTS == 2) {
+          perform_calibration(2);
+          write_cal_values_to_flash();
+          reset_calibration_state();
+          restart_pH_interval_timer();
+        }
+    }
+    else if (strstr(*packet, PT3) != NULL) {
+        // Parse out the pH value from the packet, will always be format "X.Y"
+        substring(*packet, pH_val_substring, 5, 3);
+        PT3_PH_VAL = atof(pH_val_substring); 
+       
+        read_saadc_for_calibration();
+        err_code = ble_nus_data_send(&m_nus, PT3CONF, &SIZE_CONF, m_conn_handle);
+        APP_ERROR_CHECK(err_code);
+        // Restart normal data transmision once calibration is complete
+        if (NUM_CAL_PTS == 3) {
+          perform_calibration(3);
+          write_cal_values_to_flash();
+          reset_calibration_state();
+          restart_pH_interval_timer();
+        }    
+    }
+}
+
 
 /**@brief Function for handling the data from the Nordic UART Service.
  *
@@ -383,14 +588,18 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
  * @param[in] p_evt       Nordic UART Service event.
  */
 /**@snippet [Handling the data received over BLE] */
-static inline void nus_data_handler(ble_nus_evt_t * p_evt)
+void nus_data_handler(ble_nus_evt_t * p_evt)
 {
 
     if (p_evt->type == BLE_NUS_EVT_RX_DATA)
     {
+        // Array to store data received by smartphone will never exceed 9 characters
+        char data[10];
+        // Pointer to array
+        char *data_ptr = data;
         uint32_t err_code;
 
-        NRF_LOG_DEBUG("Received data from BLE NUS. Writing data on UART.");
+        NRF_LOG_DEBUG("Received data from BLE NUS.\n");
         NRF_LOG_HEXDUMP_DEBUG(p_evt->params.rx_data.p_data, 
                                             p_evt->params.rx_data.length);
 
@@ -398,7 +607,8 @@ static inline void nus_data_handler(ble_nus_evt_t * p_evt)
         {
             do
             {
-                err_code = app_uart_put(p_evt->params.rx_data.p_data[i]);
+                // Parse data into array
+                data[i] = p_evt->params.rx_data.p_data[i];
                 if ((err_code != NRF_SUCCESS) && (err_code != NRF_ERROR_BUSY))
                 {
                     NRF_LOG_ERROR("Failed receiving NUS message. Error 0x%x. ", 
@@ -407,10 +617,8 @@ static inline void nus_data_handler(ble_nus_evt_t * p_evt)
                 }
             } while (err_code == NRF_ERROR_BUSY);
         }
-        if (p_evt->params.rx_data.p_data[p_evt->params.rx_data.length - 1] == '\r')
-        {
-            while (app_uart_put('\n') == NRF_ERROR_BUSY);
-        }
+        // Check pack for calibration protocol details
+        check_for_calibration(&data_ptr);
     }
 
 }
@@ -438,9 +646,6 @@ static void services_init(void)
 
     err_code = ble_nus_init(&m_nus, &nus_init);
     APP_ERROR_CHECK(err_code);
-
-    NRF_LOG_INFO("services_init finished\n");
-    NRF_LOG_FLUSH();
 }
 
 
@@ -465,8 +670,6 @@ static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
                                          BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
         APP_ERROR_CHECK(err_code);
     }
-    NRF_LOG_INFO("on_comm_params_evt entered\n");
-    NRF_LOG_FLUSH();
 }
 
 
@@ -476,8 +679,6 @@ static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
  */
 static void conn_params_error_handler(uint32_t nrf_error)
 {
-    NRF_LOG_INFO("conn_params_error_handler entered\n");
-    NRF_LOG_FLUSH();
     APP_ERROR_HANDLER(nrf_error);
 }
 
@@ -502,9 +703,6 @@ static void conn_params_init(void)
 
     err_code = ble_conn_params_init(&cp_init);
     APP_ERROR_CHECK(err_code);
-
-    NRF_LOG_INFO("con_params_init finished\n");
-    NRF_LOG_FLUSH();
 }
 
 
@@ -533,9 +731,6 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
 {
     uint32_t err_code;
 
-    NRF_LOG_INFO("on_adv_event entered\n");
-    NRF_LOG_FLUSH();
-
     switch (ble_adv_evt)
     {
         case BLE_ADV_EVT_FAST:
@@ -558,9 +753,6 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 {
     uint32_t err_code;
 
-    NRF_LOG_INFO("ble_evt_handler entered");
-    NRF_LOG_FLUSH();
-
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
@@ -569,7 +761,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             APP_ERROR_CHECK(err_code);
             CONNECTION_MADE = true;
 
-            NRF_LOG_INFO("CONNECTION MADE (ble_gap_evt_connected) \n");
+            NRF_LOG_INFO("CONNECTION MADE (ble_gap_evt) \n");
 
             break;
 
@@ -583,7 +775,8 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             // LED indication will be changed when advertising starts.
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
             CONNECTION_MADE = false;
-            NRF_LOG_INFO("DISCONNECTED, BLE_GAP_EVT_DISCONNECTED\n");
+            NRF_LOG_INFO("DISCONNECTED\n");
+            NRF_LOG_FLUSH();
 
             err_code = app_timer_stop(m_timer_id);
             APP_ERROR_CHECK(err_code);
@@ -592,7 +785,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             nrfx_saadc_uninit();
 
             // *** DISABLE ENABLE ***
-            disable_analog_pin();
+            disable_isfet_circuit();
 
             break;
 
@@ -607,9 +800,6 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, 
                                                                          &phys);
             APP_ERROR_CHECK(err_code);
-
-            NRF_LOG_INFO("BLE_GAP_EVT_PHY_UPDATE_REQUEST\n");
-            NRF_LOG_FLUSH();
         } break;
 
         case BLE_GATTC_EVT_TIMEOUT:
@@ -619,10 +809,6 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
                                       BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             CONNECTION_MADE = false;
             APP_ERROR_CHECK(err_code);
-
-            NRF_LOG_INFO("BLE_GATTC_EVT_TIMEOUT\n");
-            NRF_LOG_FLUSH();
-
             break;
 
         case BLE_GATTS_EVT_TIMEOUT:
@@ -632,10 +818,6 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
                                       BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             CONNECTION_MADE = false;
             APP_ERROR_CHECK(err_code);
-
-            NRF_LOG_INFO("BLE_GATTC_EVT_TIMEOUT\n");
-            NRF_LOG_FLUSH();
-
             break;
 
          case BLE_GAP_EVT_AUTH_STATUS:
@@ -649,19 +831,10 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
         case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
             NRF_LOG_INFO("BLE_GAP_EVT_SEC_PARAMS_REQUEST");
-            NRF_LOG_FLUSH();
-            break;
-
-        case BLE_GAP_EVT_PHY_UPDATE:
-            NRF_LOG_INFO("BLE_GAP_EVT_PHY_UPDATE, procedure finished\n");
-            NRF_LOG_FLUSH();
             break;
 
         default:
             // No implementation needed.
-            NRF_LOG_INFO("ble_evt_handler default case\n");
-            NRF_LOG_FLUSH();
-
             break;
     }
 }
@@ -691,9 +864,6 @@ static void ble_stack_init(void)
     // Register a handler for BLE events.
     NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, 
                                                 ble_evt_handler, NULL);
-
-    NRF_LOG_INFO("ble_stack init finished\n");
-    NRF_LOG_FLUSH();                                    
 }
 
 
@@ -728,9 +898,6 @@ static void peer_manager_init(void)
 
     err_code = pm_register(pm_evt_handler);
     APP_ERROR_CHECK(err_code);
-
-    NRF_LOG_INFO("peer manager init finished\n");
-    NRF_LOG_FLUSH();   
 }
 
 
@@ -772,9 +939,6 @@ static void advertising_init(void)
     APP_ERROR_CHECK(err_code);
 
     ble_advertising_conn_cfg_tag_set(&m_advertising, APP_BLE_CONN_CFG_TAG);
-
-    NRF_LOG_INFO("advertising init finished\n");
-    NRF_LOG_FLUSH(); 
 }
 
 
@@ -823,51 +987,59 @@ static void advertising_start(bool erase_bonds)
     else
     {
         ret_code_t err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
-        if (err_code == NRF_ERROR_INVALID_STATE) {
-            NRF_LOG_INFO("INVALID STATE FAM ******\n");
-            NRF_LOG_FLUSH();
-        }
+
         APP_ERROR_CHECK(err_code);
     }
-    NRF_LOG_INFO("advertising_start finished\n");
-    NRF_LOG_FLUSH(); 
 }
 
 
 /* This function sets enable pin for ISFET circuitry to HIGH
  */
-static inline void enable_analog_circuit(void)
+void enable_isfet_circuit(void)
 {
     nrf_drv_gpiote_out_config_t config = NRFX_GPIOTE_CONFIG_OUT_SIMPLE(false);
     if(nrf_drv_gpiote_is_init() == false) {
           nrf_drv_gpiote_init();
     }
-    nrf_drv_gpiote_out_init(ENABLE_ANALOG_PIN, &config);
-    nrf_drv_gpiote_out_set(ENABLE_ANALOG_PIN);
+    nrf_drv_gpiote_out_init(ENABLE_ISFET_PIN, &config);
+    nrf_drv_gpiote_out_set(ENABLE_ISFET_PIN);
+}
 
-    NRF_LOG_INFO("enable analog circuit finished\n");
-    NRF_LOG_FLUSH(); 
+/* This function holds POWER ON line HIGH to keep chip turned on
+ */
+void turn_chip_power_on(void)
+{
+    nrf_drv_gpiote_out_config_t config = NRFX_GPIOTE_CONFIG_OUT_SIMPLE(false);
+    if(nrf_drv_gpiote_is_init() == false) {
+          nrf_drv_gpiote_init();
+    }
+    nrf_drv_gpiote_out_init(CHIP_POWER_PIN, &config);
+    nrf_drv_gpiote_out_set(CHIP_POWER_PIN);
+}
+
+/* This functions turns POWER ON line LOW to turn the chip completely off
+ */
+void turn_chip_power_off(void)
+{
+    nrfx_gpiote_out_clear(CHIP_POWER_PIN);
 }
 
 /* This function sets enable pin for ISFET circuitry to LOW
  */
-static inline void disable_analog_pin(void)
+void disable_isfet_circuit(void)
 {
      // Redundant, but follows design
-     nrfx_gpiote_uninit();
-    NRF_LOG_INFO("disable_analog_pin finished\n");
-    NRF_LOG_FLUSH(); 
+     // nrfx_gpiote_uninit();
+     nrfx_gpiote_out_clear(ENABLE_ISFET_PIN);
 }
 
 void timer_handler(nrf_timer_event_t event_type, void * p_context)
 {
     // To Add Later
-    NRF_LOG_INFO("timer handler entered, nrf_drv_timer SAADC\n");
-    NRF_LOG_FLUSH(); 
 }
 
 
-static inline void saadc_sampling_event_init(void)
+void saadc_sampling_event_init(void)
 {
     ret_code_t err_code;
 
@@ -898,25 +1070,18 @@ static inline void saadc_sampling_event_init(void)
                                           timer_compare_event_addr,
                                           saadc_sample_task_addr);
     APP_ERROR_CHECK(err_code);
-
-    NRF_LOG_INFO("saadc_sampling_event_init finished\n");
-    NRF_LOG_FLUSH(); 
 }
 
 
-static inline void saadc_sampling_event_enable(void)
+void saadc_sampling_event_enable(void)
 {
     ret_code_t err_code = nrf_drv_ppi_channel_enable(m_ppi_channel);
     APP_ERROR_CHECK(err_code);
-    NRF_LOG_INFO("saadc_samp_event_enable finished\n");
-    NRF_LOG_FLUSH(); 
 }
 
 
-static inline void restart_saadc(void)
+void restart_saadc(void)
 {
-    NRF_LOG_INFO("restart_saadc entered\n");
-    NRF_LOG_FLUSH();
     nrfx_timer_uninit(&m_timer);
     nrfx_ppi_channel_free(m_ppi_channel);
     nrfx_saadc_uninit();
@@ -924,10 +1089,13 @@ static inline void restart_saadc(void)
         // make sure SAADC is not busy
     }
     enable_pH_voltage_reading(); 
-    NRF_LOG_INFO("restart_saadc finished\n");
-    NRF_LOG_FLUSH();
 }
 
+double calculate_pH_from_mV(uint32_t ph_val)
+{
+    // pH = (ph_val - BVAL_CALIBRATION) / (MVAL_CALIBRATION)
+    return ((double)ph_val * MVAL_CALIBRATION) + BVAL_CALIBRATION;
+}
 
 // Pack integer values into byte array to send via bluetooth
 void create_bluetooth_packet(uint32_t ph_val,
@@ -938,23 +1106,52 @@ void create_bluetooth_packet(uint32_t ph_val,
     /*
       {0,0,0,0,44,    pH value arr[0-3], comma arr[4]
        0,0,0,0,44,    temperature arr[5-8], comma arr[9]
-       0,0,0,0,10};   battery value arr[10-13], EOL arr[14]
+       0,0,0,0,44,    battery value arr[10-13], commar arr[14]
+       0 0 0 0,10};   raw pH value arr[15-18], EOL arr[19]
     */
 
-    uint32_t temp = 0;                  // hold intermediate divisions of variables
+    uint32_t temp = 0;    // hold intermediate divisions of variables
     uint32_t ASCII_DIG_BASE = 48;
 
-    // Pack ph_val into appropriate location
-    temp = ph_val;
-    for(int i = 3; i >= 0; i--){
-        if (i == 3) total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
-        else {
-            temp = temp / 10;
-            total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
-        }
+    // If calibration has not been performed, store 0000 in real pH field [0-3],
+    // and store the raw SAADC data in the last field [15-18]
+    if (!CAL_PERFORMED) {
+      temp = ph_val;
+      for(int i = 3; i >= 0; i--){
+        total_packet[i] = 0 + ASCII_DIG_BASE;
+      }
     }
-
+    // If calibration has been performed, store eal pH in [0-3],
+    // and store the raw millivolt data in the last field [15-18]
+    else if (CAL_PERFORMED) {
+      double real_pH  = calculate_pH_from_mV(ph_val);
+      double pH_decimal_vals = (real_pH - floor(real_pH)) * 100;
+      // Round pH values to 0.25 pH accuracy
+      pH_decimal_vals = round(pH_decimal_vals / 25) * 25;
+      // If decimals round to 100, increment real pH value and set decimals to 0.00
+      if (pH_decimal_vals == 100) {
+        real_pH = real_pH + 1.0;
+        pH_decimal_vals = 0.00;
+      }
+      //NRF_LOG_INFO("pH decimals: " NRF_LOG_FLOAT_MARKER " \n", NRF_LOG_FLOAT(pH_decimal_vals));
+      // If pH is 9.99 or lower, format with 2 decimal places (4 bytes total)
+      if (real_pH < 10.0) {
+        total_packet[0] = (uint8_t) ((uint8_t)floor(real_pH) + ASCII_DIG_BASE);
+        total_packet[1] = 46;
+        total_packet[2] = (uint8_t) (((uint8_t)pH_decimal_vals / 10) + ASCII_DIG_BASE);
+        total_packet[3] = (uint8_t) (((uint8_t)pH_decimal_vals % 10) + ASCII_DIG_BASE);
+      }
+      // If pH is 10.0 or greater, format with 1 decimal place (still 4 bytes total)
+      else {
+        total_packet[0] = (uint8_t) ((uint8_t)floor(real_pH / 10) + ASCII_DIG_BASE);
+        total_packet[1] = (uint8_t) ((uint8_t)floor((uint8_t)real_pH % 10) + ASCII_DIG_BASE);
+        total_packet[2] = 46;
+        total_packet[3] = (uint8_t) (((uint8_t)pH_decimal_vals / 10) + ASCII_DIG_BASE);
+      }
+    }
     // Pack temp_val into appropriate location
+    // Packing protocol for number abcd: 
+    //  [... 0, 0, 0, d] --> [... 0, 0, c, d] --> [... 0, b, c, d] --> [... a, b, c, d]
     temp = temp_val;
     for(int i = 8; i >= 5; i--){
         if (i == 8) total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
@@ -963,10 +1160,10 @@ void create_bluetooth_packet(uint32_t ph_val,
             total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
         }
     }
-
     // Pack batt_val into appropriate location
+    // Packing protocol for number abcd: 
+    //  [... 0, 0, 0, d] --> [... 0, 0, c, d] --> [... 0, b, c, d] --> [... a, b, c, d]
     temp = batt_val;
-
     for(int i = 13; i >= 10; i--){
         if (i == 13) total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
         else {
@@ -974,15 +1171,27 @@ void create_bluetooth_packet(uint32_t ph_val,
             total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
         }
     }
+    // Pack batt_val into appropriate location
+    // Packing protocol for number abcd: 
+    //  [... 0, 0, 0, d] --> [... 0, 0, c, d] --> [... 0, b, c, d] --> [... a, b, c, d]
+    temp = ph_val;
+    for(int i = 18; i >= 15; i--){
+        if (i == 18) total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
+        else {
+            temp = temp / 10;
+            total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
+        }
+    }
 }
 
-static inline uint32_t saadc_result_to_mv(uint32_t saadc_result)
+uint32_t saadc_result_to_mv(uint32_t saadc_result)
 {
-    float saadc_denom   = 4095.0;
-    float saadc_vref_mv = 3000.0;
-    float saadc_res_in_mv = ((float)saadc_result/saadc_denom) * saadc_vref_mv;
+    float adc_denom     = 4096.0;
+    float adc_ref_mv    = 600.0;
+    float adc_prescale  = 5.0;
+    float adc_res_in_mv = (((float)saadc_result*adc_ref_mv)/adc_denom) * adc_prescale;
 
-    return (uint32_t)saadc_res_in_mv;
+    return (uint32_t)adc_res_in_mv;
 }
 
 /**
@@ -995,19 +1204,22 @@ static inline uint32_t saadc_result_to_mv(uint32_t saadc_result)
  *      Workaround is to average values besides 1, divide by 
  *      samples_in_buffer -1 .
  */
-static inline void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
+void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
 {
     if (p_event->type == NRF_DRV_SAADC_EVT_DONE) 
     {
-        NRF_LOG_INFO("SAADC_CALLBACK ENTERED\n");
-        NRF_LOG_FLUSH();
-
         ret_code_t err_code;
+        uint16_t   total_size = 20;
         uint32_t   avg_saadc_reading = 0;
+        // Byte array to store total packet
+        uint8_t total_packet[] = {48,48,48,48,44,    /* real pH value, comma */
+                                  48,48,48,48,44,    /* Temperature, comma */
+                                  48,48,48,48,44,    /* Battery value, comma */
+                                  48,48,48,48,10};   /* raw pH value, EOL */
 
-        err_code = nrf_drv_saadc_buffer_convert(p_event->data.done.p_buffer, 
-                                                            SAMPLES_IN_BUFFER); 
-        APP_ERROR_CHECK(err_code);
+        //err_code = nrf_drv_saadc_buffer_convert(p_event->data.done.p_buffer, 
+        //                                                    SAMPLES_IN_BUFFER); 
+        //APP_ERROR_CHECK(err_code);
         // Sum and average SAADC values
         for (int i = 1; i < SAMPLES_IN_BUFFER; i++)
         {
@@ -1017,7 +1229,9 @@ static inline void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
             else {
                 avg_saadc_reading += p_event->data.done.p_buffer[i];
             }
+            //NRF_LOG_INFO("%d\n", p_event->data.done.p_buffer[i]);
         }
+
         avg_saadc_reading = avg_saadc_reading/(SAMPLES_IN_BUFFER - 1); 
         // If ph has not been read, read it then restart SAADC to read temp
         if (!PH_IS_READ) {
@@ -1025,154 +1239,180 @@ static inline void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
             PH_IS_READ = true;
             // Uninit saadc peripheral, restart saadc, enable sampling event
             NRF_LOG_INFO("read pH val, restarting: %d", AVG_PH_VAL);
-            NRF_LOG_FLUSH();
+            //NRF_LOG_FLUSH();
             restart_saadc();
         } 
         // If pH has been read but not battery, read battery then restart
         else if (!(PH_IS_READ && BATTERY_IS_READ)) {
             AVG_BATT_VAL = saadc_result_to_mv(avg_saadc_reading);
             NRF_LOG_INFO("read batt val, restarting: %d", AVG_BATT_VAL);
-            NRF_LOG_FLUSH();
+            //NRF_LOG_FLUSH();
             BATTERY_IS_READ = true;
             restart_saadc();
         }
-        // Once temp, batter and ph have been read, create and send data in packet
+        // Once temp, battery and ph have been read, create and send data in packet
+        // or adjust the calibration points as necessary
         else {
             AVG_TEMP_VAL = saadc_result_to_mv(avg_saadc_reading);
-            NRF_LOG_INFO("read temp val: %d", AVG_TEMP_VAL);
+            NRF_LOG_INFO("read temp val: %d\n", AVG_TEMP_VAL);
             NRF_LOG_FLUSH();
+
+            //NRF_LOG_ERROR( "MVAL: " NRF_LOG_FLOAT_MARKER "\n", NRF_LOG_FLOAT(MVAL_CALIBRATION));
+            //NRF_LOG_ERROR( "BVAL: " NRF_LOG_FLOAT_MARKER "\n", NRF_LOG_FLOAT(BVAL_CALIBRATION));
+          
+            // reset global control boolean
+            PH_IS_READ = false;
+            BATTERY_IS_READ = false;
   
-            // Create bluetooth data
-            create_bluetooth_packet(AVG_PH_VAL, AVG_BATT_VAL, 
-                                    AVG_TEMP_VAL, total_packet);
-            
-            // Disable pH voltage reading
+            // Pack data and send via bluetooth if not in calibration mode
+            if (!CAL_MODE) {
+              // Create bluetooth data
+              create_bluetooth_packet(AVG_PH_VAL, AVG_BATT_VAL, 
+                                      AVG_TEMP_VAL, total_packet);
+
+              // Send data
+              err_code = ble_nus_data_send(&m_nus, total_packet, 
+                                           &total_size, m_conn_handle);
+              //APP_ERROR_CHECK(err_code);
+              
+
+              // Turn off peripherals
+              //NRF_LOG_INFO("BLUETOOTH DATA SENT\n");
+              //NRF_LOG_FLUSH();
+            }
+
             disable_pH_voltage_reading();
  
-            NRF_LOG_INFO("SAADC_CALLBACK finished\n");
-            NRF_LOG_FLUSH();
-
-
-            // Begin advertising
-            advertising_start(false);
+            //NRF_LOG_INFO("SAADC DISABLED\n");
+            //NRF_LOG_FLUSH();
         }
     }
 }
 
 
-/* Reads pH transducer output
- */
-void saadc_init(void)
+void saadc_blocking_callback(nrf_drv_saadc_evt_t const * p_event)
+{
+    // Don't need to do anything
+}
+
+
+void init_saadc_for_buffer_conversion(nrf_saadc_channel_config_t channel_config)
 {
     ret_code_t err_code;
-    nrf_saadc_input_t ANALOG_INPUT;
-    // Change pin depending on global control boolean
-    if (!PH_IS_READ) {
-        NRF_LOG_INFO("Setting saadc input to AIN1\n");
-        NRF_LOG_FLUSH();
-        ANALOG_INPUT = NRF_SAADC_INPUT_AIN1;
-    }
-    else if (!(PH_IS_READ && BATTERY_IS_READ)) {
-        NRF_LOG_INFO("Setting saadc input to AIN3\n");
-        NRF_LOG_FLUSH();
-        ANALOG_INPUT = NRF_SAADC_INPUT_AIN3;
-    }
-    else {
-        NRF_LOG_INFO("Setting saadc input to AIN0\n");
-        NRF_LOG_FLUSH();
-        ANALOG_INPUT = NRF_SAADC_INPUT_AIN0;        
-    }
-
-    nrf_saadc_channel_config_t channel_config =
-            NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(ANALOG_INPUT);
-
     err_code = nrf_drv_saadc_init(NULL, saadc_callback);
     APP_ERROR_CHECK(err_code);
-
-    /*
-     * BUG: calibration never completes
-     */
-
-    // Calibrate offset
-    // if(!SAADC_CALIBRATED) {
-    //     while (nrfx_saadc_calibrate_offset() != NRFX_SUCCESS) {
-    //         NRF_LOG_INFO("calibration does not equal success\n");
-    //         NRF_LOG_FLUSH();
-    //         nrf_delay_us(10);
-    //     }
-    //     SAADC_CALIBRATED = true;
-    //     while (nrfx_saadc_is_busy()) {
-    //         NRF_LOG_INFO("saadc busy while restarting\n");
-    //         NRF_LOG_FLUSH();
-    //         nrf_delay_ms(1000);
-    //     }
-    // }   
 
     err_code = nrf_drv_saadc_channel_init(0, &channel_config);
     APP_ERROR_CHECK(err_code);
 
     err_code = nrf_drv_saadc_buffer_convert(m_buffer_pool[0], SAMPLES_IN_BUFFER);
     APP_ERROR_CHECK(err_code);
+}
 
-    NRF_LOG_INFO("saadc_init finished\n");
-    NRF_LOG_FLUSH();
+void init_saadc_for_blocking_sample_conversion(nrf_saadc_channel_config_t channel_config)
+{
+    ret_code_t err_code;
+    err_code = nrf_drv_saadc_init(NULL, saadc_blocking_callback);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = nrf_drv_saadc_channel_init(0, &channel_config);
+    APP_ERROR_CHECK(err_code);
+}
+
+/* Reads pH transducer output
+ */
+void saadc_init(void)
+{
+    nrf_saadc_input_t ANALOG_INPUT;
+    // Change pin depending on global control boolean
+    if (!PH_IS_READ) {
+        //NRF_LOG_INFO("Setting saadc input to AIN2\n");
+        ANALOG_INPUT = NRF_SAADC_INPUT_AIN2;
+    }
+    else if (!(PH_IS_READ && BATTERY_IS_READ)) {
+        //NRF_LOG_INFO("Setting saadc input to AIN3\n");
+        ANALOG_INPUT = NRF_SAADC_INPUT_AIN3;
+    }
+    else {
+        //NRF_LOG_INFO("Setting saadc input to AIN1\n");
+        ANALOG_INPUT = NRF_SAADC_INPUT_AIN1;        
+    }
+
+    nrf_saadc_channel_config_t channel_config =
+            NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(ANALOG_INPUT);
+    
+    if (!CAL_MODE)
+      init_saadc_for_buffer_conversion(channel_config);
+    else 
+      init_saadc_for_blocking_sample_conversion(channel_config);
 }
 
 
 /* This function initializes and enables SAADC sampling
  */
-static inline void enable_pH_voltage_reading(void)
+void enable_pH_voltage_reading(void)
 {
-    NRF_LOG_INFO("enable_ph_voltage_reading entered\n");
-    NRF_LOG_FLUSH();
-
     saadc_init();
-    saadc_sampling_event_init();
-    saadc_sampling_event_enable();
+    if (!CAL_MODE) {
+      saadc_sampling_event_init();
+      saadc_sampling_event_enable();
+    }
     nrf_pwr_mgmt_run();
+}
 
-    NRF_LOG_INFO("enable_ph_voltage_reading finished\n");
-    NRF_LOG_FLUSH();
+void restart_pH_interval_timer(void)
+{
+      ret_code_t err_code;
+      err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(DATA_INTERVAL), NULL);
+      APP_ERROR_CHECK(err_code);
+      nrf_pwr_mgmt_run();
+
+      //NRF_LOG_INFO("TIMER RESTARTED (disable_ph_voltage_reading)\n");
+      //NRF_LOG_FLUSH();
 }
 
 /* Function unitializes and disables SAADC sampling, restarts 1 second timer
  */
-static inline void disable_pH_voltage_reading(void)
+void disable_pH_voltage_reading(void)
 {
-    NRF_LOG_INFO("disable_ph_voltage_reading entered\n");
-    NRF_LOG_FLUSH();
-
     nrfx_timer_uninit(&m_timer);
     nrfx_ppi_channel_free(m_ppi_channel);
     nrfx_saadc_uninit();
-
-    NRF_LOG_INFO("m_timer nrfx_timer uninit, inside disable_ph_voltage_reading\n");
-    NRF_LOG_FLUSH();
+    while(nrfx_saadc_is_busy()) {
+        // make sure SAADC is not busy
+    }
 
     // *** DISABLE ENABLE ***
-    disable_analog_pin();
+    //disable_isfet_circuit();
+
+    if (!CAL_MODE) {
+      // Restart timer
+      restart_pH_interval_timer();
+    }
 }
 
-static inline void single_shot_timer_handler()
+void single_shot_timer_handler()
 {
-    NRF_LOG_INFO("single shot timer handler entered\n");
-    NRF_LOG_FLUSH();
     // disable timer
     ret_code_t err_code;
     err_code = app_timer_stop(m_timer_id);
-    
-    NRF_LOG_INFO("m_timer_id stopped, inside single shot timer handler\n");
-    NRF_LOG_FLUSH();
+    APP_ERROR_CHECK(err_code);
 
-    // Delay to ensure appropriate timing between
-    enable_analog_circuit();       
+    // Delay to ensure appropriate timing 
+    enable_isfet_circuit();       
     // PWM output, ISFET capacitor, etc
     nrf_delay_ms(10);              
     // Begin SAADC initialization/start
+
+    /* * * * * * * * * * * * * * *
+     *  UNCOMMENT TO SEND DATA
+     */
+
     enable_pH_voltage_reading();
 
-    NRF_LOG_INFO("single_shot_timer_handler finished\n");
-    NRF_LOG_FLUSH();
+    /*
+     *  UNCOMMENT TO SEND DATA
+     * * * * * * * * * * * * * * */
 }
 
 /**@brief Function for handling events from the GATT library. */
@@ -1190,42 +1430,22 @@ void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
                   p_gatt->att_mtu_desired_central,
                   p_gatt->att_mtu_desired_periph);
 
-    // Send data
     ret_code_t err_code;
 
-    // Send data
-    do
-      {
-         err_code = ble_nus_data_send(&m_nus, total_packet, 
-                                      &total_size, m_conn_handle);
-         if ((err_code != NRF_ERROR_INVALID_STATE) &&
-             (err_code != NRF_ERROR_RESOURCES) &&
-             (err_code != NRF_ERROR_NOT_FOUND))
-         {
-                APP_ERROR_CHECK(err_code);              
-         }
-      } while (err_code == NRF_ERROR_RESOURCES);
-
-    // reset global control boolean
-    PH_IS_READ = false;
-    BATTERY_IS_READ = false;
- 
-    // Turn off peripherals
-    NRF_LOG_INFO("BLUETOOTH DATA SENT\n");
-    NRF_LOG_FLUSH();
-
-    // Disconnect from central device
-    err_code = sd_ble_gap_disconnect(m_conn_handle, 
-                                     BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-    m_conn_handle = BLE_CONN_HANDLE_INVALID;
-
-    // Restart timer
-    err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(10000), NULL);
+    // Create application timer
+    err_code = app_timer_create(&m_timer_id,
+                                APP_TIMER_MODE_SINGLE_SHOT,
+                                single_shot_timer_handler);
     APP_ERROR_CHECK(err_code);
-    nrf_pwr_mgmt_run();
+        
+    // 1 second timer intervals
+    err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(DATA_INTERVAL), NULL);
+    APP_ERROR_CHECK(err_code);
 
-    NRF_LOG_INFO("APP TIMER RESTARTED m_timer_id (disable_ph_voltage_reading)\n");
+    //NRF_LOG_INFO("TIMER STARTED (gatt_evt_handler) \n");
     NRF_LOG_FLUSH();
+
+      
 }
 
 /**@brief Function for initializing the GATT library. */
@@ -1241,23 +1461,271 @@ void gatt_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
-void init_and_start_app_timer()
+// Helper function for linreg
+inline static double sqr(double x) {
+    return x*x;
+}
+
+/*
+ * Function for running linear regression on two and three point calibration data
+ */
+void linreg(int num, double x[], double y[])
 {
-    ret_code_t err_code;
+    double   sumx  = 0.0;                     /* sum of x     */
+    double   sumx2 = 0.0;                     /* sum of x**2  */
+    double   sumxy = 0.0;                     /* sum of x * y */
+    double   sumy  = 0.0;                     /* sum of y     */
+    double   sumy2 = 0.0;                     /* sum of y**2  */
 
-    // Create application timer
-    err_code = app_timer_create(&m_timer_id,
-                                APP_TIMER_MODE_SINGLE_SHOT,
-                                single_shot_timer_handler);
-    APP_ERROR_CHECK(err_code);
-        
-    // 1 second timer intervals
-    err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(10), NULL);
-    APP_ERROR_CHECK(err_code);
+    for (int i=0;i<num;i++){ 
+        sumx  += x[i];       
+        sumx2 += sqr(x[i]);  
+        sumxy += x[i] * y[i];
+        sumy  += y[i];      
+        sumy2 += sqr(y[i]); 
+    } 
 
-    NRF_LOG_INFO("APP TIMER STARTED, m_timer_id (gatt_evt_handler) \n");
+    double denom = (num * sumx2 - sqr(sumx));
+
+    if (denom == 0) {
+        // singular matrix. can't solve the problem.
+        NRF_LOG_INFO("singular matrix, cannot solve regression\n");
+    }
+
+    MVAL_CALIBRATION = (num * sumxy  -  sumx * sumy) / denom;
+    BVAL_CALIBRATION = (sumy * sumx2  -  sumx * sumxy) / denom;
+    RVAL_CALIBRATION = (sumxy - sumx * sumy / num) /    
+                        sqrt((sumx2 - sqr(sumx)/num) *
+                       (sumy2 - sqr(sumy)/num));
+
+    NRF_LOG_INFO("MVAL **CAL**: " NRF_LOG_FLOAT_MARKER "", NRF_LOG_FLOAT(MVAL_CALIBRATION));
+    NRF_LOG_INFO("BVAL **CAL**: " NRF_LOG_FLOAT_MARKER "", NRF_LOG_FLOAT(BVAL_CALIBRATION));
+    NRF_LOG_INFO("RVAL **CAL**: " NRF_LOG_FLOAT_MARKER " \n", NRF_LOG_FLOAT(RVAL_CALIBRATION));
+}
+
+
+void my_fds_evt_handler(fds_evt_t const * const p_fds_evt)
+{
+    //NRF_LOG_INFO("INSIDE FDS EVENT HANDLER");
+    //NRF_LOG_INFO("    FDS ID: %d, FDS RESULT: %d \n", p_fds_evt->id, p_fds_evt->result);
+    //NRF_LOG_FLUSH();
+    switch (p_fds_evt->id)
+    {
+        case FDS_EVT_INIT:
+            if (p_fds_evt->result != FDS_SUCCESS)
+            {
+                NRF_LOG_INFO("ERROR IN EVENT HANDLER\n");
+                NRF_LOG_FLUSH();
+            }
+            break;
+        case FDS_EVT_WRITE:
+            if (p_fds_evt->result == FDS_SUCCESS)
+            {
+                write_flag=1;
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+static void fds_write(float value, uint16_t FILE_ID, uint16_t REC_KEY)
+{
+    fds_record_t       record;
+    fds_record_desc_t  record_desc;
+
+    // Set up record.
+    record.file_id              = FILE_ID;
+    record.key                 = REC_KEY;
+    record.data.length_words   = 1;
+
+    if(FILE_ID == MVAL_FILE_ID && REC_KEY == MVAL_REC_KEY){
+      record.data.p_data = &MVAL_CALIBRATION;
+    }
+    else if(FILE_ID == BVAL_FILE_ID && REC_KEY == BVAL_REC_KEY){
+      record.data.p_data = &BVAL_CALIBRATION;
+    }
+    else if(FILE_ID == RVAL_FILE_ID && REC_KEY == RVAL_REC_KEY){
+      record.data.p_data = &RVAL_CALIBRATION;
+    }
+    else if(FILE_ID == CAL_DONE_FILE_ID && REC_KEY == CAL_DONE_REC_KEY) {
+      record.data.p_data = &CAL_PERFORMED;
+    }
+                    
+    ret_code_t ret = fds_record_write(&record_desc, &record);
+    if (ret != FDS_SUCCESS)
+    {
+        NRF_LOG_INFO("ERROR WRITING TO FLASH\n");
+    }
+    NRF_LOG_INFO("SUCCESS WRITING TO FLASH\n");
     NRF_LOG_FLUSH();
 }
+
+static void fds_update(float value, uint16_t FILE_ID, uint16_t REC_KEY)
+{
+    fds_record_t       record;
+    fds_record_desc_t  record_desc;
+    fds_find_token_t    ftok ={0};
+
+    // Set up record.
+    record.file_id              = FILE_ID;
+    record.key                 = REC_KEY;
+    record.data.length_words   = 1;
+
+    if(FILE_ID == MVAL_FILE_ID && REC_KEY == MVAL_REC_KEY){
+      record.data.p_data = &MVAL_CALIBRATION;
+      fds_record_find(MVAL_FILE_ID, MVAL_REC_KEY, &record_desc, &ftok);
+    }
+    else if(FILE_ID == BVAL_FILE_ID && REC_KEY == BVAL_REC_KEY){
+      record.data.p_data = &BVAL_CALIBRATION;
+      fds_record_find(BVAL_FILE_ID, BVAL_REC_KEY, &record_desc, &ftok);
+    }
+    else if(FILE_ID == RVAL_FILE_ID && REC_KEY == RVAL_REC_KEY){
+      record.data.p_data = &RVAL_CALIBRATION;
+      fds_record_find(RVAL_FILE_ID, RVAL_REC_KEY, &record_desc, &ftok);
+    }
+    else if(FILE_ID == CAL_DONE_FILE_ID && REC_KEY == CAL_DONE_REC_KEY) {
+      record.data.p_data = &CAL_PERFORMED;
+      fds_record_find(CAL_DONE_FILE_ID, CAL_DONE_REC_KEY, &record_desc, &ftok);
+    }
+                    
+    ret_code_t ret = fds_record_update(&record_desc, &record);
+    if (ret != FDS_SUCCESS)
+    {
+        NRF_LOG_INFO("ERROR WRITING UPDATE TO FLASH\n");
+    }
+    NRF_LOG_INFO("SUCCESS WRITING UPDATE TO FLASH\n");
+    NRF_LOG_FLUSH();
+}
+
+float fds_read(uint16_t FILE_ID, uint16_t REC_KEY)
+{
+    fds_flash_record_t  flash_record;
+    fds_record_desc_t  record_desc;
+    fds_find_token_t    ftok ={0};//Important, make sure you zero init the ftok token
+    float *p_data;
+    float data;
+    uint32_t err_code;
+    
+    NRF_LOG_INFO("Start searching... \r\n");
+    // Loop until all records with the given key and file ID have been found.
+    while (fds_record_find(FILE_ID, REC_KEY, &record_desc, &ftok) == FDS_SUCCESS)
+    {
+        err_code = fds_record_open(&record_desc, &flash_record);
+        if ( err_code != FDS_SUCCESS)
+        {
+                NRF_LOG_INFO("COULD NOT FIND OR OPEN RECORD\n");	
+                return 0.0;
+        }
+
+        p_data = (float *) flash_record.p_data;
+        data = *p_data;
+        for (uint8_t i=0;i<flash_record.p_header->length_words;i++)
+        {
+                NRF_LOG_INFO("Data read: " NRF_LOG_FLOAT_MARKER "\n", NRF_LOG_FLOAT(data));
+        }
+        NRF_LOG_INFO("\r\n");
+        // Access the record through the flash_record structure.
+        // Close the record when done.
+        err_code = fds_record_close(&record_desc);
+        if (err_code != FDS_SUCCESS)
+        {
+                NRF_LOG_INFO("ERROR CLOSING RECORD\n");
+        }
+        NRF_LOG_FLUSH();
+    }
+    NRF_LOG_INFO("SUCCESS CLOSING RECORD\n");
+    return data;
+}
+
+static void fds_find_and_delete(uint16_t FILE_ID, uint16_t REC_KEY)
+{
+    fds_record_desc_t  record_desc;
+    fds_find_token_t    ftok;
+	
+    ftok.page=0;
+    ftok.p_addr=NULL;
+    // Loop and find records with same ID and rec key and mark them as deleted. 
+    while (fds_record_find(FILE_ID, REC_KEY, &record_desc, &ftok) == FDS_SUCCESS)
+    {
+        fds_record_delete(&record_desc);
+        NRF_LOG_INFO("Deleted record ID: %d \r\n",record_desc.record_id);
+    }
+    // call the garbage collector to empty them, don't need to do this all the time, 
+    // this is just for demonstration
+    ret_code_t ret = fds_gc();
+    if (ret != FDS_SUCCESS)
+    {
+        NRF_LOG_INFO("ERROR DELETING RECORD\n");
+    }
+    NRF_LOG_INFO("RECORD DELETED SUCCESFULLY\n");
+}
+
+static void fds_init_helper(void)
+{	
+    ret_code_t ret = fds_register(my_fds_evt_handler);
+    if (ret != FDS_SUCCESS)
+    {
+        NRF_LOG_INFO("ERROR, COULD NOT REGISTER FDS\n");
+                    
+    }
+    ret = fds_init();
+    if (ret != FDS_SUCCESS)
+    {
+        NRF_LOG_INFO("ERROR, COULD NOT INIT FDS\n");
+    }
+    
+    NRF_LOG_INFO("FDS INIT\n");	
+}
+
+/* Check words used in fds after initialization, and if more than 4 (default)
+ * words are used then read MVAL, BVAL and RVAL values stored in flash. Assign
+ * stored values to global variables respectively
+ */
+static void check_calibration_state(void)
+{
+    fds_stat_t fds_info;
+    fds_stat(&fds_info);
+    NRF_LOG_INFO("open records: %u, words used: %u\n", fds_info.open_records, 
+                                                       fds_info.words_used);
+    // fds_read will return 0 if the CAL_DONE record does not exist, 
+    // or if the stored value is 0
+    if(fds_read(CAL_DONE_FILE_ID, CAL_DONE_REC_KEY)) {
+      CAL_PERFORMED = 1.0;
+      NRF_LOG_INFO("Setting CAL_PERFORMED to true\n");
+      // Read values stored in flash and set to respective global variables
+      MVAL_CALIBRATION = fds_read(MVAL_FILE_ID, MVAL_REC_KEY);
+      BVAL_CALIBRATION = fds_read(BVAL_FILE_ID, BVAL_REC_KEY);
+      RVAL_CALIBRATION = fds_read(RVAL_FILE_ID, RVAL_REC_KEY);
+      NRF_LOG_INFO("MVAL: " NRF_LOG_FLOAT_MARKER " \n", NRF_LOG_FLOAT(MVAL_CALIBRATION));
+      NRF_LOG_INFO("BVAL: " NRF_LOG_FLOAT_MARKER " \n", NRF_LOG_FLOAT(BVAL_CALIBRATION));
+      NRF_LOG_INFO("RVAL: " NRF_LOG_FLOAT_MARKER " \n", NRF_LOG_FLOAT(RVAL_CALIBRATION));
+    }
+}
+
+/* If calibration has already been performed then update existing records with new 
+ * values. If calibration has not already been performed, then write values to
+ * new records
+ */
+void write_cal_values_to_flash(void) 
+{
+    // Update the existing flash records
+    if (CAL_PERFORMED) {
+        fds_update(MVAL_CALIBRATION, MVAL_FILE_ID,     MVAL_REC_KEY);
+        fds_update(BVAL_CALIBRATION, BVAL_FILE_ID,     BVAL_REC_KEY);
+        fds_update(RVAL_CALIBRATION, RVAL_FILE_ID,     RVAL_REC_KEY);
+        fds_update(CAL_PERFORMED,    CAL_DONE_FILE_ID, CAL_DONE_REC_KEY);
+    }
+    // Write values to new records
+    else {
+        fds_write(MVAL_CALIBRATION, MVAL_FILE_ID,     MVAL_REC_KEY);
+        fds_write(BVAL_CALIBRATION, BVAL_FILE_ID,     BVAL_REC_KEY);
+        fds_write(RVAL_CALIBRATION, RVAL_FILE_ID,     RVAL_REC_KEY);
+        fds_write(CAL_PERFORMED,    CAL_DONE_FILE_ID, CAL_DONE_REC_KEY);
+    }
+}
+      
+
 
 /**@brief Application main function.
  */
@@ -1265,9 +1733,19 @@ int main(void)
 {
     bool erase_bonds = false;
 
+    // Call function very first to turn on the chip
+    turn_chip_power_on();
+    enable_isfet_circuit();
+
     log_init();
     timers_init();
     power_management_init();
+
+    // Initialize fds and check for calibration values
+    fds_init_helper();
+    check_calibration_state();
+
+    // Continue with adjusted calibration state
     ble_stack_init();
     gap_params_init();
     gatt_init();
@@ -1275,11 +1753,13 @@ int main(void)
     advertising_init();
     conn_params_init();
     peer_manager_init();
+    advertising_start(erase_bonds);
 
-    init_and_start_app_timer();
-
-    for(;;)
-      idle_state_handle();
+    // Enter main loop.
+    while (true)
+    {
+        idle_state_handle();
+    } 
 }
 
 /*
