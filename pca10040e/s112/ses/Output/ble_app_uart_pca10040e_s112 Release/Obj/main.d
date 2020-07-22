@@ -3,6 +3,10 @@ Output/ble_app_uart_pca10040e_s112\ Release/Obj/main.o: \
  /usr/share/segger_embedded_studio_for_arm_4.22/include/stdint.h \
  /usr/share/segger_embedded_studio_for_arm_4.22/include/string.h \
  /usr/share/segger_embedded_studio_for_arm_4.22/include/__crossworks.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/time.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/sys/time.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/stdlib.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/math.h \
  ../../../../../../components/libraries/util/nordic_common.h \
  ../../../../../../components/boards/boards.h \
  ../../../../../../modules/nrfx/hal/nrf_gpio.h \
@@ -95,8 +99,6 @@ Output/ble_app_uart_pca10040e_s112\ Release/Obj/main.o: \
  ../../../../../../integration/nrfx/legacy/nrf_drv_timer.h \
  ../../../../../../modules/nrfx/drivers/include/nrfx_timer.h \
  ../../../../../../modules/nrfx/hal/nrf_timer.h \
- ../../../../../../modules/nrfx/drivers/include/nrfx_pwm.h \
- ../../../../../../modules/nrfx/hal/nrf_pwm.h \
  ../../../../../../modules/nrfx/hal/nrf_timer.h \
  ../../../../../../components/ble/ble_services/ble_nus/ble_nus.h \
  ../../../../../../components/ble/ble_link_ctx_manager/ble_link_ctx_manager.h \
@@ -112,7 +114,6 @@ Output/ble_app_uart_pca10040e_s112\ Release/Obj/main.o: \
  ../../../../../../components/libraries/util/app_error.h \
  ../../../../../../components/libraries/uart/app_uart.h \
  ../../../../../../components/libraries/fifo/app_fifo.h \
- /usr/share/segger_embedded_studio_for_arm_4.22/include/stdlib.h \
  ../../../../../../components/libraries/pwm/app_pwm.h \
  ../../../../../../components/libraries/log/nrf_log.h \
  ../../../../../../components/libraries/experimental_section_vars/nrf_section.h \

@@ -65,10 +65,7 @@
       <file file_name="../../../../../../components/libraries/experimental_section_vars/nrf_section_iter.c" />
       <file file_name="../../../../../../components/libraries/strerror/nrf_strerror.c" />
       <file file_name="../../../../../../components/libraries/uart/retarget.c" />
-      <file file_name="../../../../../../components/libraries/fds/fds.c" />
-      <file file_name="../../../../../../components/libraries/fstorage/nrf_fstorage.c" />
       <file file_name="../../../../../../components/libraries/fstorage/nrf_fstorage_sd.c" />
-      <file file_name="../../../../../../components/libraries/util/sdk_mapped_flags.c" />
     </folder>
     <folder Name="None">
       <file file_name="../../../../../../modules/nrfx/mdk/ses_startup_nrf52810.s" />
@@ -90,15 +87,10 @@
       <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_saadc.c" />
       <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_timer.c" />
       <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_uart.c" />
-      <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_rtc.c" />
     </folder>
     <folder Name="Board Support">
       <file file_name="../../../../../../components/libraries/bsp/bsp.c" />
       <file file_name="../../../../../../components/libraries/bsp/bsp_btn_ble.c" />
-    </folder>
-    <folder Name="Application">
-      <file file_name="../../../main.c" />
-      <file file_name="../config/sdk_config.h" />
     </folder>
     <folder Name="nRF_Segger_RTT">
       <file file_name="../../../../../../external/segger_rtt/SEGGER_RTT.c" />
@@ -114,7 +106,9 @@
       <file file_name="../../../../../../components/ble/common/ble_srv_common.c" />
       <file file_name="../../../../../../components/ble/nrf_ble_gatt/nrf_ble_gatt.c" />
       <file file_name="../../../../../../components/ble/nrf_ble_qwr/nrf_ble_qwr.c" />
-      <file file_name="../../../../../../components/ble/peer_manager/auth_status_tracker.c" />
+      <file file_name="../../../../../../components/libraries/fds/fds.c" />
+      <file file_name="../../../../../../components/libraries/fstorage/nrf_fstorage.c" />
+      <file file_name="../../../../../../components/libraries/util/sdk_mapped_flags.c" />
       <file file_name="../../../../../../components/ble/peer_manager/gatt_cache_manager.c" />
       <file file_name="../../../../../../components/ble/peer_manager/gatts_cache_manager.c" />
       <file file_name="../../../../../../components/ble/peer_manager/id_manager.c" />
@@ -125,7 +119,11 @@
       <file file_name="../../../../../../components/ble/peer_manager/peer_manager_handler.c" />
       <file file_name="../../../../../../components/ble/peer_manager/pm_buffer.c" />
       <file file_name="../../../../../../components/ble/peer_manager/security_dispatcher.c" />
-      <file file_name="../../../../../../components/ble/peer_manager/security_manager.c" />
+      <file file_name="../../../../../../components/ble/peer_manager/security_manager.c">
+        <configuration
+          Name="Release"
+          gcc_optimization_level="Optimize For Size" />
+      </file>
     </folder>
     <folder Name="UTF8/UTF16 converter">
       <file file_name="../../../../../../external/utf_converter/utf.c" />
@@ -138,12 +136,20 @@
       <file file_name="../../../../../../components/softdevice/common/nrf_sdh_ble.c" />
       <file file_name="../../../../../../components/softdevice/common/nrf_sdh_soc.c" />
     </folder>
+    <folder Name="Application">
+      <file file_name="../../../main.c" />
+      <file file_name="../config/sdk_config.h" />
+    </folder>
     <configuration
       Name="Release"
-      c_user_include_directories="../../../../../../components/ble/peer_manager/\;../../../../../../components/libraries/fds\;../../../../../../components/libraries/fstorage\;../../../../../../components/libraries/experimental_section_vars\;" />
+      c_user_include_directories=".\;../../../../../../components/libraries/fds\;../../../../../../components/libraries/fstorage\;../../../../../../components/libraries/experimental_section_vars\;../../../../../../components/ble/peer_manager/"
+      gcc_optimization_level="Optimize For Size"
+      linker_output_format="hex" />
   </project>
   <configuration
     Name="Release"
     c_preprocessor_definitions="NDEBUG"
-    gcc_optimization_level="Optimize For Size" />
+    gcc_optimization_level="Optimize For Size"
+    linker_output_format="hex"
+    linker_section_placement_macros="" />
 </solution>
