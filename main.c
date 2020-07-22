@@ -150,7 +150,7 @@
 
 #define SAMPLES_IN_BUFFER               50                                          /**< SAADC buffer > */
 
-#define DATA_INTERVAL                   500
+#define DATA_INTERVAL                   10000
 
 
 #define NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(PIN_P) \
@@ -216,6 +216,14 @@ float     RVAL_CALIBRATION  = 0;
 float     CAL_PERFORMED     = 0;
 static volatile uint8_t write_flag=0;
 
+// Byte array to store total packet
+uint8_t total_packet[] = {48,48,48,48,44,    /* real pH value, comma */
+                          48,48,48,48,44,    /* Temperature, comma */
+                          48,48,48,48,44,    /* Battery value, comma */
+                          48,48,48,48,10};   /* raw pH value, EOL */
+// Total size of bluetooth packet
+uint16_t   total_size = 20;
+
 /* Used for reading/writing calibration values to flash */
 #define MVAL_FILE_ID      0x1110
 #define MVAL_REC_KEY      0x1111
@@ -234,6 +242,8 @@ static       nrf_ppi_channel_t m_ppi_channel;
 
 
 // Forward declarations
+void init_and_start_app_timer   (void);
+void send_data_and_restart_timer(void);
 void enable_pH_voltage_reading  (void);
 void disable_pH_voltage_reading (void);
 void saadc_init                 (void);
@@ -274,8 +284,7 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
  */
 static void pm_evt_handler(pm_evt_t const * p_evt)
 {
-    //NRF_LOG_INFO("ENTERED PM_EVT_HANDLER\n");
-    //NRF_LOG_FLUSH();
+    NRF_LOG_INFO("ENTERED PM_EVT_HANDLER\n");
     pm_handler_on_pm_evt(p_evt);
     pm_handler_flash_clean(p_evt);
 
@@ -397,8 +406,6 @@ void read_saadc_for_calibration(void)
       AVG_PH_VAL += saadc_result_to_mv(temp_val);
     }
     AVG_PH_VAL = AVG_PH_VAL / NUM_SAMPLES;
-    //NRF_LOG_INFO("averaged avg_ph_val: %u\n");
-    //NRF_LOG_FLUSH();
     // Assign averaged readings to the correct calibration point
     if(!PT1_READ){
       PT1_MV_VAL = (double)AVG_PH_VAL;
@@ -621,6 +628,11 @@ void nus_data_handler(ble_nus_evt_t * p_evt)
         check_for_calibration(&data_ptr);
     }
 
+    if (p_evt->type == BLE_NUS_EVT_COMM_STARTED)
+    {
+        send_data_and_restart_timer();
+    }
+
 }
 /**@snippet [Handling the data received over BLE] */
 
@@ -663,6 +675,8 @@ static void services_init(void)
 static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
 {
     uint32_t err_code;
+
+    NRF_LOG_INFO("INSIDE CONN PARAMS EVT\n");
 
     if (p_evt->evt_type == BLE_CONN_PARAMS_EVT_FAILED)
     {
@@ -753,6 +767,9 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 {
     uint32_t err_code;
 
+    NRF_LOG_INFO("INSIDE BLE EVT HANDLER\n");
+    NRF_LOG_INFO("evt id: %u\n", p_ble_evt->header.evt_id);
+
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
@@ -778,14 +795,13 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             NRF_LOG_INFO("DISCONNECTED\n");
             NRF_LOG_FLUSH();
 
-            err_code = app_timer_stop(m_timer_id);
-            APP_ERROR_CHECK(err_code);
             nrfx_timer_uninit(&m_timer);
             nrfx_ppi_channel_free(m_ppi_channel);
             nrfx_saadc_uninit();
 
             // *** DISABLE ENABLE ***
             disable_isfet_circuit();
+            init_and_start_app_timer();
 
             break;
 
@@ -1133,7 +1149,6 @@ void create_bluetooth_packet(uint32_t ph_val,
         real_pH = real_pH + 1.0;
         pH_decimal_vals = 0.00;
       }
-      //NRF_LOG_INFO("pH decimals: " NRF_LOG_FLOAT_MARKER " \n", NRF_LOG_FLOAT(pH_decimal_vals));
       // If pH is 9.99 or lower, format with 2 decimal places (4 bytes total)
       if (real_pH < 10.0) {
         total_packet[0] = (uint8_t) ((uint8_t)floor(real_pH) + ASCII_DIG_BASE);
@@ -1209,13 +1224,8 @@ void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
     if (p_event->type == NRF_DRV_SAADC_EVT_DONE) 
     {
         ret_code_t err_code;
-        uint16_t   total_size = 20;
         uint32_t   avg_saadc_reading = 0;
-        // Byte array to store total packet
-        uint8_t total_packet[] = {48,48,48,48,44,    /* real pH value, comma */
-                                  48,48,48,48,44,    /* Temperature, comma */
-                                  48,48,48,48,44,    /* Battery value, comma */
-                                  48,48,48,48,10};   /* raw pH value, EOL */
+        
 
         //err_code = nrf_drv_saadc_buffer_convert(p_event->data.done.p_buffer, 
         //                                                    SAMPLES_IN_BUFFER); 
@@ -1263,28 +1273,10 @@ void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
             // reset global control boolean
             PH_IS_READ = false;
             BATTERY_IS_READ = false;
-  
-            // Pack data and send via bluetooth if not in calibration mode
-            if (!CAL_MODE) {
-              // Create bluetooth data
-              create_bluetooth_packet(AVG_PH_VAL, AVG_BATT_VAL, 
-                                      AVG_TEMP_VAL, total_packet);
 
-              // Send data
-              err_code = ble_nus_data_send(&m_nus, total_packet, 
-                                           &total_size, m_conn_handle);
-              //APP_ERROR_CHECK(err_code);
-              
-
-              // Turn off peripherals
-              //NRF_LOG_INFO("BLUETOOTH DATA SENT\n");
-              //NRF_LOG_FLUSH();
-            }
-
+            // Disable all resources, turn off adc/etc, advertise
             disable_pH_voltage_reading();
- 
-            //NRF_LOG_INFO("SAADC DISABLED\n");
-            //NRF_LOG_FLUSH();
+            advertising_start(false);
         }
     }
 }
@@ -1383,12 +1375,7 @@ void disable_pH_voltage_reading(void)
     }
 
     // *** DISABLE ENABLE ***
-    //disable_isfet_circuit();
-
-    if (!CAL_MODE) {
-      // Restart timer
-      restart_pH_interval_timer();
-    }
+    disable_isfet_circuit();
 }
 
 void single_shot_timer_handler()
@@ -1400,7 +1387,7 @@ void single_shot_timer_handler()
 
     // Delay to ensure appropriate timing 
     enable_isfet_circuit();       
-    // PWM output, ISFET capacitor, etc
+    // Slight delay for ISFET to achieve optimal ISFET reading
     nrf_delay_ms(10);              
     // Begin SAADC initialization/start
 
@@ -1415,9 +1402,46 @@ void single_shot_timer_handler()
      * * * * * * * * * * * * * * */
 }
 
+void send_data_and_restart_timer()
+{
+    uint32_t err_code;
+
+    // Create packet
+    create_bluetooth_packet(AVG_PH_VAL, AVG_BATT_VAL, 
+                            AVG_TEMP_VAL, total_packet);
+//    // Send data
+//    err_code = ble_nus_data_send(&m_nus, total_packet, 
+//                                 &total_size, m_conn_handle);
+//    APP_ERROR_CHECK(err_code);
+
+    // Send data
+    do
+      {
+         err_code = ble_nus_data_send(&m_nus, total_packet, 
+                                      &total_size, m_conn_handle);
+         NRF_LOG_INFO("error code: %u", err_code);
+         if ((err_code != NRF_ERROR_INVALID_STATE) &&
+             (err_code != NRF_ERROR_RESOURCES) &&
+             (err_code != NRF_ERROR_NOT_FOUND))
+         {
+                
+                APP_ERROR_CHECK(err_code);              
+         }
+      } while (err_code == NRF_ERROR_RESOURCES);
+
+    // Disconnect
+    err_code = sd_ble_gap_disconnect(m_conn_handle, 
+                                     BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+    APP_ERROR_CHECK(err_code);
+}
+
 /**@brief Function for handling events from the GATT library. */
 void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
 {
+    uint32_t err_code;
+
+    NRF_LOG_INFO("INSIDE GATT EVT HANDLER");
+
     if ((m_conn_handle == p_evt->conn_handle) && 
         (p_evt->evt_id == NRF_BLE_GATT_EVT_ATT_MTU_UPDATED))
     {
@@ -1428,8 +1452,13 @@ void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
     }
     NRF_LOG_DEBUG("ATT MTU exchange completed. central 0x%x peripheral 0x%x",
                   p_gatt->att_mtu_desired_central,
-                  p_gatt->att_mtu_desired_periph);
+                  p_gatt->att_mtu_desired_periph);  
 
+
+}
+
+void init_and_start_app_timer()
+{
     ret_code_t err_code;
 
     // Create application timer
@@ -1442,10 +1471,8 @@ void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
     err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(DATA_INTERVAL), NULL);
     APP_ERROR_CHECK(err_code);
 
-    //NRF_LOG_INFO("TIMER STARTED (gatt_evt_handler) \n");
+    NRF_LOG_INFO("TIMER STARTED (single shot) \n");
     NRF_LOG_FLUSH();
-
-      
 }
 
 /**@brief Function for initializing the GATT library. */
@@ -1753,9 +1780,13 @@ int main(void)
     advertising_init();
     conn_params_init();
     peer_manager_init();
-    advertising_start(erase_bonds);
+    
+    // Start intermittent data reading <> advertising protocol
+    enable_isfet_circuit();
+    nrf_delay_ms(10);
+    enable_pH_voltage_reading();
 
-    // Enter main loop.
+    // Enter main loop for power management
     while (true)
     {
         idle_state_handle();
