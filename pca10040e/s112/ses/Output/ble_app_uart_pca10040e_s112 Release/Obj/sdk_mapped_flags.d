@@ -1,13 +1,13 @@
 Output/ble_app_uart_pca10040e_s112\ Release/Obj/sdk_mapped_flags.o: \
- /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/sdk_mapped_flags.c \
- /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/sdk_mapped_flags.h \
- /usr/share/segger_embedded_studio_for_arm_4.22/include/stdint.h \
- /usr/share/segger_embedded_studio_for_arm_4.22/include/stdbool.h \
- /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/app_util.h \
- /usr/share/segger_embedded_studio_for_arm_4.22/include/stddef.h \
- /usr/share/segger_embedded_studio_for_arm_4.22/include/__crossworks.h \
+ /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/sdk_mapped_flags.c \
+ /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/sdk_mapped_flags.h \
+ /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stdint.h \
+ /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stdbool.h \
+ /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/app_util.h \
+ /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stddef.h \
+ /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/__crossworks.h \
  ../../../../../../modules/nrfx/mdk/compiler_abstraction.h \
- /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/nordic_common.h \
+ /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/nordic_common.h \
  ../../../../../../modules/nrfx/mdk/nrf.h \
  ../../../../../../modules/nrfx/mdk/nrf52810.h \
  ../../../../../../components/toolchain/cmsis/include/core_cm4.h \

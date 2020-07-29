@@ -1,11 +1,11 @@
 Output/ble_app_uart_pca10040e_s112\ Release/Obj/nrf_atfifo.o: \
- /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/atomic_fifo/nrf_atfifo.c \
- /usr/share/segger_embedded_studio_for_arm_4.22/include/string.h \
- /usr/share/segger_embedded_studio_for_arm_4.22/include/__crossworks.h \
- /usr/share/segger_embedded_studio_for_arm_4.22/include/stdint.h \
- /usr/share/segger_embedded_studio_for_arm_4.22/include/stdbool.h \
+ /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/atomic_fifo/nrf_atfifo.c \
+ /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/string.h \
+ /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/__crossworks.h \
+ /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stdint.h \
+ /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stdbool.h \
  ../../../../../../components/libraries/util/app_util.h \
- /usr/share/segger_embedded_studio_for_arm_4.22/include/stddef.h \
+ /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stddef.h \
  ../../../../../../modules/nrfx/mdk/compiler_abstraction.h \
  ../../../../../../components/libraries/util/nordic_common.h \
  ../../../../../../modules/nrfx/mdk/nrf.h \
@@ -20,7 +20,7 @@ Output/ble_app_uart_pca10040e_s112\ Release/Obj/nrf_atfifo.o: \
  ../../../../../../modules/nrfx/mdk/nrf51_to_nrf52810.h \
  ../../../../../../modules/nrfx/mdk/nrf52_to_nrf52810.h \
  ../../../../../../modules/nrfx/mdk/compiler_abstraction.h \
- /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/atomic_fifo/nrf_atfifo.h \
+ /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/atomic_fifo/nrf_atfifo.h \
  ../config/sdk_config.h \
  ../../../../../../components/libraries/util/nordic_common.h \
  ../../../../../../components/libraries/util/nrf_assert.h \
@@ -29,7 +29,7 @@ Output/ble_app_uart_pca10040e_s112\ Release/Obj/nrf_atfifo.o: \
  ../../../../../../components/libraries/log/nrf_log_instance.h \
  ../../../../../../components/libraries/experimental_section_vars/nrf_section.h \
  ../../../../../../components/libraries/log/nrf_log_types.h \
- /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/atomic_fifo/nrf_atfifo_internal.h \
+ /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/atomic_fifo/nrf_atfifo_internal.h \
  ../../../../../../components/libraries/log/nrf_log.h \
  ../../../../../../components/libraries/util/sdk_common.h \
  ../../../../../../components/libraries/util/sdk_os.h \
@@ -37,6 +37,5 @@ Output/ble_app_uart_pca10040e_s112\ Release/Obj/nrf_atfifo.o: \
  ../../../../../../components/libraries/util/app_util.h \
  ../../../../../../components/libraries/util/sdk_macros.h \
  ../../../../../../components/libraries/util/nrf_assert.h \
- ../../../../../../components/libraries/strerror/nrf_strerror.h \
  ../../../../../../components/libraries/log/src/nrf_log_internal.h \
  ../../../../../../components/libraries/log/nrf_log_types.h

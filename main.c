@@ -122,14 +122,14 @@
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 
-#define APP_ADV_INTERVAL                510                                         /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
+#define APP_ADV_INTERVAL                325                                         /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
 
-#define APP_ADV_DURATION                18000                                       /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
+#define APP_ADV_DURATION                500                                         /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
 
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
 #define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (200 ms), Connection interval uses 1.25 ms units. */
 #define SLAVE_LATENCY                   0                                           /**< Slave latency. */
-#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
+#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(5000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000)                       /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(30000)                      /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT    3                                           /**< Number of attempts before giving up the connection parameter negotiation. */
@@ -321,14 +321,7 @@ static void pm_evt_handler(pm_evt_t const * p_evt)
 }
 
 
-/**@brief Function for initializing the timer module.
- */
-void timers_init(void)
-{
-    uint32_t err_code;
-    err_code = app_timer_init();
-    APP_ERROR_CHECK(err_code);
-}
+
 
 
 /**@brief Function for the GAP initialization.
@@ -707,7 +700,7 @@ static void conn_params_init(void)
     memset(&cp_init, 0, sizeof(cp_init));
 
     cp_init.p_conn_params                  = NULL;
-    cp_init.first_conn_params_update_delay  = FIRST_CONN_PARAMS_UPDATE_DELAY;
+    cp_init.first_conn_params_update_delay = FIRST_CONN_PARAMS_UPDATE_DELAY;
     cp_init.next_conn_params_update_delay  = NEXT_CONN_PARAMS_UPDATE_DELAY;
     cp_init.max_conn_params_update_count   = MAX_CONN_PARAMS_UPDATE_COUNT;
     cp_init.start_on_notify_cccd_handle    = BLE_GATT_HANDLE_INVALID;
@@ -743,14 +736,15 @@ static void sleep_mode_enter(void)
  */
 static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
 {
-    uint32_t err_code;
-
     switch (ble_adv_evt)
     {
         case BLE_ADV_EVT_FAST:
+            NRF_LOG_INFO("FAST ADVERTISING STARTED");
             break;
         case BLE_ADV_EVT_IDLE:
-            sleep_mode_enter();
+            NRF_LOG_INFO("on_adv_evt IDLE EVENT");
+            // Restart timer 
+            init_and_start_app_timer();
             break;
         default:
             break;
@@ -772,6 +766,11 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
     switch (p_ble_evt->header.evt_id)
     {
+        case 38:
+            NRF_LOG_INFO("CASE 38\n");
+            init_and_start_app_timer();
+            break;
+
         case BLE_GAP_EVT_CONNECTED:
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
@@ -793,14 +792,6 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
             CONNECTION_MADE = false;
             NRF_LOG_INFO("DISCONNECTED\n");
-            NRF_LOG_FLUSH();
-
-            nrfx_timer_uninit(&m_timer);
-            nrfx_ppi_channel_free(m_ppi_channel);
-            nrfx_saadc_uninit();
-
-            // *** DISABLE ENABLE ***
-            disable_isfet_circuit();
             init_and_start_app_timer();
 
             break;
@@ -819,21 +810,32 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
         } break;
 
         case BLE_GATTC_EVT_TIMEOUT:
+            NRF_LOG_INFO("TIMEOUT GATTC EVT\n");
             // Disconnect on GATT Client timeout event.
             err_code = 
                 sd_ble_gap_disconnect(p_ble_evt->evt.gattc_evt.conn_handle,
                                       BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-            CONNECTION_MADE = false;
-            APP_ERROR_CHECK(err_code);
+            m_conn_handle = BLE_CONN_HANDLE_INVALID;
+            // restart timer
+            init_and_start_app_timer();
             break;
 
         case BLE_GATTS_EVT_TIMEOUT:
+            NRF_LOG_INFO("TIMEOUT GATTS EVT\n");
             // Disconnect on GATT Server timeout event.
             err_code = 
                 sd_ble_gap_disconnect(p_ble_evt->evt.gatts_evt.conn_handle,
                                       BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-            CONNECTION_MADE = false;
+            m_conn_handle = BLE_CONN_HANDLE_INVALID;
             APP_ERROR_CHECK(err_code);
+            // restart timer
+            init_and_start_app_timer();
+            break;
+
+         case BLE_GAP_EVT_TIMEOUT:
+            NRF_LOG_INFO("TIMEOUT GAP EVT\n");
+            // Restart timer 
+            init_and_start_app_timer();
             break;
 
          case BLE_GAP_EVT_AUTH_STATUS:
@@ -1006,6 +1008,8 @@ static void advertising_start(bool erase_bonds)
 
         APP_ERROR_CHECK(err_code);
     }
+    NRF_LOG_INFO("Advertising started");
+    NRF_LOG_FLUSH();
 }
 
 
@@ -1044,9 +1048,9 @@ void turn_chip_power_off(void)
  */
 void disable_isfet_circuit(void)
 {
-     // Redundant, but follows design
-     // nrfx_gpiote_uninit();
      nrfx_gpiote_out_clear(ENABLE_ISFET_PIN);
+     nrfx_gpiote_uninit();
+
 }
 
 void timer_handler(nrf_timer_event_t event_type, void * p_context)
@@ -1349,7 +1353,6 @@ void enable_pH_voltage_reading(void)
       saadc_sampling_event_init();
       saadc_sampling_event_enable();
     }
-    nrf_pwr_mgmt_run();
 }
 
 void restart_pH_interval_timer(void)
@@ -1357,10 +1360,6 @@ void restart_pH_interval_timer(void)
       ret_code_t err_code;
       err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(DATA_INTERVAL), NULL);
       APP_ERROR_CHECK(err_code);
-      nrf_pwr_mgmt_run();
-
-      //NRF_LOG_INFO("TIMER RESTARTED (disable_ph_voltage_reading)\n");
-      //NRF_LOG_FLUSH();
 }
 
 /* Function unitializes and disables SAADC sampling, restarts 1 second timer
@@ -1374,7 +1373,7 @@ void disable_pH_voltage_reading(void)
         // make sure SAADC is not busy
     }
 
-    // *** DISABLE ENABLE ***
+    // *** DISABLE BIASING CIRCUITRY ***
     disable_isfet_circuit();
 }
 
@@ -1400,6 +1399,20 @@ void single_shot_timer_handler()
     /*
      *  UNCOMMENT TO SEND DATA
      * * * * * * * * * * * * * * */
+}
+
+
+/**@brief Function for initializing the timer module.
+ */
+void timers_init(void)
+{
+    uint32_t err_code;
+    err_code = app_timer_init();
+    APP_ERROR_CHECK(err_code);
+    err_code = app_timer_create(&m_timer_id,
+                                  APP_TIMER_MODE_SINGLE_SHOT,
+                                  single_shot_timer_handler);
+    APP_ERROR_CHECK(err_code);
 }
 
 void send_data_and_restart_timer()
@@ -1461,15 +1474,10 @@ void init_and_start_app_timer()
 {
     ret_code_t err_code;
 
-    // Create application timer
-    err_code = app_timer_create(&m_timer_id,
-                                APP_TIMER_MODE_SINGLE_SHOT,
-                                single_shot_timer_handler);
-    APP_ERROR_CHECK(err_code);
-        
-    // 1 second timer intervals
     err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(DATA_INTERVAL), NULL);
     APP_ERROR_CHECK(err_code);
+
+    idle_state_handle();
 
     NRF_LOG_INFO("TIMER STARTED (single shot) \n");
     NRF_LOG_FLUSH();
@@ -1762,7 +1770,6 @@ int main(void)
 
     // Call function very first to turn on the chip
     turn_chip_power_on();
-    enable_isfet_circuit();
 
     log_init();
     timers_init();
