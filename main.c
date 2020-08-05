@@ -1107,8 +1107,10 @@ void saadc_sampling_event_enable(void)
 void restart_saadc(void)
 {
     ret_code_t err_code;
+    nrfx_timer_disable(&m_timer);
     nrfx_timer_uninit(&m_timer);
     err_code = nrfx_ppi_channel_free(m_ppi_channel);
+    APP_ERROR_CHECK(err_code);
     nrfx_saadc_uninit();
     NVIC_ClearPendingIRQ(SAADC_IRQn);
     while(nrfx_saadc_is_busy()) {
@@ -1374,8 +1376,10 @@ void disable_pH_voltage_reading(void)
 {
     NRF_LOG_INFO("Disabling pH voltage reading");
     ret_code_t err_code;
+    nrfx_timer_disable(&m_timer);
     nrfx_timer_uninit(&m_timer);
     err_code = nrfx_ppi_channel_free(m_ppi_channel);
+    APP_ERROR_CHECK(err_code);
     nrfx_saadc_uninit();
     NVIC_ClearPendingIRQ(SAADC_IRQn);
     while(nrfx_saadc_is_busy()) {
@@ -1476,6 +1480,7 @@ void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
 
 void init_and_start_app_timer()
 {
+    sd_ble_gap_adv_stop(m_conn_handle);
     ret_code_t err_code;
 
     err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(DATA_INTERVAL), NULL);
@@ -1761,17 +1766,6 @@ void write_cal_values_to_flash(void)
         fds_write(CAL_PERFORMED,    CAL_DONE_FILE_ID, CAL_DONE_REC_KEY);
     }
 }
-      
-/** @brief Function starting the internal LFCLK XTAL oscillator.
- */
-static void lfclk_config(void)
-{
-    ret_code_t err_code = nrf_drv_clock_init();
-    APP_ERROR_CHECK(err_code);
-
-    nrf_drv_clock_lfclk_request(NULL);
-}
-
 
 /**@brief Application main function.
  */
@@ -1783,16 +1777,15 @@ int main(void)
     turn_chip_power_on();
 
     log_init();
-    lfclk_config();
-    timers_init();
     power_management_init();
 
     // Initialize fds and check for calibration values
     fds_init_helper();
-    check_calibration_state();
+    //check_calibration_state();
 
     // Continue with adjusted calibration state
     ble_stack_init();
+    timers_init();
     gap_params_init();
     gatt_init();
     services_init();

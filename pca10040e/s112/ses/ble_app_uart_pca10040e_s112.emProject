@@ -77,7 +77,9 @@
     </folder>
     <folder Name="nRF_Drivers">
       <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_clock.c" />
-      <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_uart.c" />
+      <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_uart.c">
+        <configuration Name="Release" build_exclude_from_build="No" />
+      </file>
       <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_clock.c" />
       <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_gpiote.c" />
       <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_power_clock.c" />
@@ -149,7 +151,7 @@
   <configuration
     Name="Release"
     c_preprocessor_definitions="NDEBUG"
-    gcc_optimization_level="Level 2 for size"
+    gcc_optimization_level="Optimize For Size"
     linker_output_format="hex"
     linker_section_placement_macros="" />
 </solution>
