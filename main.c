@@ -117,7 +117,7 @@
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define DEVICE_NAME                     "Lura_Health_Test"                   /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "Lura_Health_Dan"                   /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
@@ -744,7 +744,7 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
         case BLE_ADV_EVT_IDLE:
             NRF_LOG_INFO("on_adv_evt IDLE EVENT");
             // Restart timer 
-            init_and_start_app_timer();
+//            init_and_start_app_timer();
             break;
         default:
             break;
@@ -1017,11 +1017,14 @@ static void advertising_start(bool erase_bonds)
  */
 void enable_isfet_circuit(void)
 {
+    ret_code_t err_code;
     nrf_drv_gpiote_out_config_t config = NRFX_GPIOTE_CONFIG_OUT_SIMPLE(false);
     if(nrf_drv_gpiote_is_init() == false) {
-          nrf_drv_gpiote_init();
+          err_code = nrf_drv_gpiote_init();
+          APP_ERROR_CHECK(err_code);
     }
-    nrf_drv_gpiote_out_init(ENABLE_ISFET_PIN, &config);
+    err_code = nrf_drv_gpiote_out_init(ENABLE_ISFET_PIN, &config);
+    APP_ERROR_CHECK(err_code);
     nrf_drv_gpiote_out_set(ENABLE_ISFET_PIN);
 }
 
@@ -1049,6 +1052,7 @@ void turn_chip_power_off(void)
 void disable_isfet_circuit(void)
 {
      nrfx_gpiote_out_clear(ENABLE_ISFET_PIN);
+     nrfx_gpiote_out_uninit(ENABLE_ISFET_PIN);
      nrfx_gpiote_uninit();
 
 }
@@ -1102,9 +1106,11 @@ void saadc_sampling_event_enable(void)
 
 void restart_saadc(void)
 {
+    ret_code_t err_code;
     nrfx_timer_uninit(&m_timer);
-    nrfx_ppi_channel_free(m_ppi_channel);
+    err_code = nrfx_ppi_channel_free(m_ppi_channel);
     nrfx_saadc_uninit();
+    NVIC_ClearPendingIRQ(SAADC_IRQn);
     while(nrfx_saadc_is_busy()) {
         // make sure SAADC is not busy
     }
@@ -1366,9 +1372,12 @@ void restart_pH_interval_timer(void)
  */
 void disable_pH_voltage_reading(void)
 {
+    NRF_LOG_INFO("Disabling pH voltage reading");
+    ret_code_t err_code;
     nrfx_timer_uninit(&m_timer);
-    nrfx_ppi_channel_free(m_ppi_channel);
+    err_code = nrfx_ppi_channel_free(m_ppi_channel);
     nrfx_saadc_uninit();
+    NVIC_ClearPendingIRQ(SAADC_IRQn);
     while(nrfx_saadc_is_busy()) {
         // make sure SAADC is not busy
     }
@@ -1422,11 +1431,6 @@ void send_data_and_restart_timer()
     // Create packet
     create_bluetooth_packet(AVG_PH_VAL, AVG_BATT_VAL, 
                             AVG_TEMP_VAL, total_packet);
-//    // Send data
-//    err_code = ble_nus_data_send(&m_nus, total_packet, 
-//                                 &total_size, m_conn_handle);
-//    APP_ERROR_CHECK(err_code);
-
     // Send data
     do
       {
@@ -1476,8 +1480,6 @@ void init_and_start_app_timer()
 
     err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(DATA_INTERVAL), NULL);
     APP_ERROR_CHECK(err_code);
-
-    idle_state_handle();
 
     NRF_LOG_INFO("TIMER STARTED (single shot) \n");
     NRF_LOG_FLUSH();
@@ -1760,6 +1762,15 @@ void write_cal_values_to_flash(void)
     }
 }
       
+/** @brief Function starting the internal LFCLK XTAL oscillator.
+ */
+static void lfclk_config(void)
+{
+    ret_code_t err_code = nrf_drv_clock_init();
+    APP_ERROR_CHECK(err_code);
+
+    nrf_drv_clock_lfclk_request(NULL);
+}
 
 
 /**@brief Application main function.
@@ -1772,6 +1783,7 @@ int main(void)
     turn_chip_power_on();
 
     log_init();
+    lfclk_config();
     timers_init();
     power_management_init();
 

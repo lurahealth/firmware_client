@@ -1,18 +1,18 @@
 Output/ble_app_uart_pca10040e_s112\ Release/Obj/app_error_handler_gcc.o: \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/app_error_handler_gcc.c \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/sdk_common.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stdint.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stdbool.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/string.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/__crossworks.h \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/app_error_handler_gcc.c \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/sdk_common.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/stdint.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/stdbool.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/string.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/__crossworks.h \
  ../config/sdk_config.h \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/nordic_common.h \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/nordic_common.h \
  ../../../../../../modules/nrfx/mdk/compiler_abstraction.h \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/sdk_os.h \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/sdk_errors.h \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/sdk_os.h \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/sdk_errors.h \
  ../../../../../../components/softdevice/s112/headers/nrf_error.h \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/app_util.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stddef.h \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/app_util.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/stddef.h \
  ../../../../../../modules/nrfx/mdk/nrf.h \
  ../../../../../../modules/nrfx/mdk/nrf52810.h \
  ../../../../../../components/toolchain/cmsis/include/core_cm4.h \
@@ -25,8 +25,8 @@ Output/ble_app_uart_pca10040e_s112\ Release/Obj/app_error_handler_gcc.o: \
  ../../../../../../modules/nrfx/mdk/nrf51_to_nrf52810.h \
  ../../../../../../modules/nrfx/mdk/nrf52_to_nrf52810.h \
  ../../../../../../modules/nrfx/mdk/compiler_abstraction.h \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/sdk_macros.h \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/nrf_assert.h \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/app_error.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stdio.h \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/app_error_weak.h
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/sdk_macros.h \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/nrf_assert.h \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/app_error.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/stdio.h \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/util/app_error_weak.h

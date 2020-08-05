@@ -1,13 +1,13 @@
 Output/ble_app_uart_pca10040e_s112\ Release/Obj/nrf_drv_uart.o: \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/integration/nrfx/legacy/nrf_drv_uart.c \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/integration/nrfx/legacy/nrf_drv_uart.h \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/integration/nrfx/legacy/nrf_drv_uart.c \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/integration/nrfx/legacy/nrf_drv_uart.h \
  ../../../../../../modules/nrfx/nrfx.h \
  ../../../../../../integration/nrfx/nrfx_config.h ../config/sdk_config.h \
  ../../../../../../modules/nrfx/drivers/nrfx_common.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stdint.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stddef.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/__crossworks.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stdbool.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/stdint.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/stddef.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/__crossworks.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/stdbool.h \
  ../../../../../../modules/nrfx/mdk/nrf.h \
  ../../../../../../modules/nrfx/mdk/nrf52810.h \
  ../../../../../../components/toolchain/cmsis/include/core_cm4.h \
@@ -39,7 +39,7 @@ Output/ble_app_uart_pca10040e_s112\ Release/Obj/nrf_drv_uart.o: \
  ../../../../../../components/softdevice/s112/headers/nrf_nvic.h \
  ../../../../../../components/libraries/util/nrf_assert.h \
  ../../../../../../components/libraries/util/app_error.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stdio.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/stdio.h \
  ../../../../../../components/libraries/util/sdk_errors.h \
  ../../../../../../components/softdevice/s112/headers/nrf_error.h \
  ../../../../../../components/libraries/util/app_error_weak.h \

@@ -1,15 +1,15 @@
 Output/ble_app_uart_pca10040e_s112\ Release/Obj/nrf_fstorage.o: \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/fstorage/nrf_fstorage.c \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/fstorage/nrf_fstorage.c \
  ../config/sdk_config.h \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/fstorage/nrf_fstorage.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stdint.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stdbool.h \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/libraries/fstorage/nrf_fstorage.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/stdint.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/stdbool.h \
  ../../../../../../components/libraries/util/sdk_errors.h \
  ../../../../../../components/softdevice/s112/headers/nrf_error.h \
  ../../../../../../components/libraries/experimental_section_vars/nrf_section.h \
  ../../../../../../components/libraries/util/nordic_common.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stddef.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/__crossworks.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/stddef.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/__crossworks.h \
  ../../../../../../components/libraries/util/sdk_macros.h \
  ../../../../../../components/libraries/util/nrf_assert.h \
  ../../../../../../modules/nrfx/mdk/nrf.h \
@@ -26,7 +26,7 @@ Output/ble_app_uart_pca10040e_s112\ Release/Obj/nrf_fstorage.o: \
  ../../../../../../modules/nrfx/mdk/compiler_abstraction.h \
  ../../../../../../components/libraries/log/nrf_log.h \
  ../../../../../../components/libraries/util/sdk_common.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/string.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/string.h \
  ../../../../../../components/libraries/util/nordic_common.h \
  ../../../../../../modules/nrfx/mdk/compiler_abstraction.h \
  ../../../../../../components/libraries/util/sdk_os.h \

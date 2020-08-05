@@ -1,9 +1,9 @@
 Output/ble_app_uart_pca10040e_s112\ Release/Obj/ble_link_ctx_manager.o: \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/ble/ble_link_ctx_manager/ble_link_ctx_manager.c \
- /Users/nhill/Desktop/nRF5_SDK_15.2.0_9412b96_STABLE/components/ble/ble_link_ctx_manager/ble_link_ctx_manager.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stdint.h \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/ble/ble_link_ctx_manager/ble_link_ctx_manager.c \
+ /home/noah/programming/firmware/nRF5_SDK_15.2.0_9412b96_STABLE/components/ble/ble_link_ctx_manager/ble_link_ctx_manager.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/stdint.h \
  ../../../../../../components/ble/common/ble_conn_state.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stdbool.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/stdbool.h \
  ../../../../../../components/softdevice/s112/headers/ble.h \
  ../../../../../../components/softdevice/s112/headers/nrf_svc.h \
  ../../../../../../components/softdevice/s112/headers/nrf_error.h \
@@ -30,8 +30,8 @@ Output/ble_app_uart_pca10040e_s112\ Release/Obj/ble_link_ctx_manager.o: \
  ../../../../../../components/softdevice/s112/headers/ble_gap.h \
  ../../../../../../components/libraries/atomic/nrf_atomic.h \
  ../../../../../../components/libraries/util/sdk_common.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/string.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/__crossworks.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/string.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/__crossworks.h \
  ../config/sdk_config.h \
  ../../../../../../components/libraries/util/nordic_common.h \
  ../../../../../../modules/nrfx/mdk/compiler_abstraction.h \
@@ -39,7 +39,7 @@ Output/ble_app_uart_pca10040e_s112\ Release/Obj/ble_link_ctx_manager.o: \
  ../../../../../../components/libraries/util/sdk_errors.h \
  ../../../../../../components/softdevice/s112/headers/nrf_error.h \
  ../../../../../../components/libraries/util/app_util.h \
- /Applications/SEGGER\ Embedded\ Studio\ for\ ARM\ 4.52c/include/stddef.h \
+ /usr/share/segger_embedded_studio_for_arm_4.22/include/stddef.h \
  ../../../../../../components/libraries/util/sdk_macros.h \
  ../../../../../../components/libraries/util/nrf_assert.h \
  ../../../../../../components/libraries/util/sdk_errors.h
