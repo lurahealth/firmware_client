@@ -1238,10 +1238,6 @@ void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
         ret_code_t err_code;
         uint32_t   avg_saadc_reading = 0;
         
-
-        //err_code = nrf_drv_saadc_buffer_convert(p_event->data.done.p_buffer, 
-        //                                                    SAMPLES_IN_BUFFER); 
-        //APP_ERROR_CHECK(err_code);
         // Sum and average SAADC values
         for (int i = 1; i < SAMPLES_IN_BUFFER; i++)
         {
@@ -1251,7 +1247,6 @@ void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
             else {
                 avg_saadc_reading += p_event->data.done.p_buffer[i];
             }
-            //NRF_LOG_INFO("%d\n", p_event->data.done.p_buffer[i]);
         }
 
         avg_saadc_reading = avg_saadc_reading/(SAMPLES_IN_BUFFER - 1); 
@@ -1291,6 +1286,47 @@ void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
             advertising_start(false);
         }
     }
+}
+
+// Read saadc values for temperature, battery level, and pH to store for calibration
+void read_saadc_for_regular_protocol(void) 
+{
+    int NUM_SAMPLES = 30;
+    nrf_saadc_value_t temp_val = 0;
+    ret_code_t err_code;
+    uint32_t AVG_MV_VAL = 0;
+
+    for (int i = 0; i < NUM_SAMPLES; i++) {
+      err_code = nrfx_saadc_sample_convert(0, &temp_val);
+      APP_ERROR_CHECK(err_code);
+      AVG_MV_VAL += saadc_result_to_mv(temp_val);
+      nrf_delay_us(5);
+    }
+    AVG_MV_VAL = AVG_MV_VAL / NUM_SAMPLES;
+    // Assign averaged readings to the correct calibration point
+    if(!PH_IS_READ){
+      AVG_PH_VAL = AVG_MV_VAL;
+      NRF_LOG_INFO("read pH val, restarting: %d", AVG_PH_VAL);
+      NRF_LOG_FLUSH();
+      PH_IS_READ = true;
+      restart_saadc();
+    }
+    else if (!(PH_IS_READ && BATTERY_IS_READ)){
+      AVG_BATT_VAL = AVG_MV_VAL;
+      NRF_LOG_INFO("read batt val, restarting: %d", AVG_BATT_VAL);
+      NRF_LOG_FLUSH();
+      BATTERY_IS_READ = true;
+      restart_saadc();
+    }
+    else {
+       AVG_TEMP_VAL = AVG_MV_VAL;
+       NRF_LOG_INFO("read temp val, restarting: %d", AVG_TEMP_VAL);
+       NRF_LOG_FLUSH();
+       PH_IS_READ = false;
+       BATTERY_IS_READ = false;
+       disable_pH_voltage_reading();
+       advertising_start(false);
+    }    
 }
 
 
@@ -1345,9 +1381,9 @@ void saadc_init(void)
     nrf_saadc_channel_config_t channel_config =
             NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(ANALOG_INPUT);
     
-    if (!CAL_MODE)
-      init_saadc_for_buffer_conversion(channel_config);
-    else 
+//    if (!CAL_MODE)
+//      init_saadc_for_buffer_conversion(channel_config);
+//    else 
       init_saadc_for_blocking_sample_conversion(channel_config);
 }
 
@@ -1357,10 +1393,11 @@ void saadc_init(void)
 void enable_pH_voltage_reading(void)
 {
     saadc_init();
-    if (!CAL_MODE) {
-      saadc_sampling_event_init();
-      saadc_sampling_event_enable();
-    }
+//    if (!CAL_MODE) {
+//      saadc_sampling_event_init();
+//      saadc_sampling_event_enable();
+//    }
+    read_saadc_for_regular_protocol();
 }
 
 void restart_pH_interval_timer(void)
@@ -1374,12 +1411,12 @@ void restart_pH_interval_timer(void)
  */
 void disable_pH_voltage_reading(void)
 {
-    NRF_LOG_INFO("Disabling pH voltage reading");
+    NRF_LOG_INFO("\n*** Disabling pH voltage reading ***\n\n");
+    NRF_LOG_FLUSH();
     ret_code_t err_code;
-    nrfx_timer_disable(&m_timer);
-    nrfx_timer_uninit(&m_timer);
-    err_code = nrfx_ppi_channel_free(m_ppi_channel);
-    APP_ERROR_CHECK(err_code);
+//    nrf_drv_timer_disable(&m_timer);
+//    err_code = nrfx_ppi_channel_free(m_ppi_channel);
+//    APP_ERROR_CHECK(err_code);
     nrfx_saadc_uninit();
     NVIC_ClearPendingIRQ(SAADC_IRQn);
     while(nrfx_saadc_is_busy()) {
