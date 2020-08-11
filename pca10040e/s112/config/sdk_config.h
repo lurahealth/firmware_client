@@ -103,7 +103,7 @@
 // <e> NRFX_GPIOTE_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_GPIOTE_CONFIG_LOG_ENABLED
-#define NRFX_GPIOTE_CONFIG_LOG_ENABLED 0
+#define NRFX_GPIOTE_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_GPIOTE_CONFIG_LOG_LEVEL  - Default Severity level
  
@@ -154,7 +154,7 @@
 // <e> GPIOTE_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef GPIOTE_CONFIG_LOG_ENABLED
-#define GPIOTE_CONFIG_LOG_ENABLED 0
+#define GPIOTE_CONFIG_LOG_ENABLED 1
 #endif
 // <o> GPIOTE_CONFIG_LOG_LEVEL  - Default Severity level
  
@@ -394,7 +394,7 @@
 // <e> BLE_BAS_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef BLE_BAS_CONFIG_LOG_ENABLED
-#define BLE_BAS_CONFIG_LOG_ENABLED 0
+#define BLE_BAS_CONFIG_LOG_ENABLED 1
 #endif
 // <o> BLE_BAS_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -506,7 +506,7 @@
 // <e> BLE_IAS_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef BLE_IAS_CONFIG_LOG_ENABLED
-#define BLE_IAS_CONFIG_LOG_ENABLED 0
+#define BLE_IAS_CONFIG_LOG_ENABLED 1
 #endif
 // <o> BLE_IAS_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -588,7 +588,7 @@
 // <e> BLE_NUS_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef BLE_NUS_CONFIG_LOG_ENABLED
-#define BLE_NUS_CONFIG_LOG_ENABLED 0
+#define BLE_NUS_CONFIG_LOG_ENABLED 1
 #endif
 // <o> BLE_NUS_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -1583,7 +1583,7 @@
 // <e> I2S_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef I2S_CONFIG_LOG_ENABLED
-#define I2S_CONFIG_LOG_ENABLED 0
+#define I2S_CONFIG_LOG_ENABLED 1
 #endif
 // <o> I2S_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -1746,7 +1746,7 @@
 // <e> NRFX_CLOCK_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_CLOCK_CONFIG_LOG_ENABLED
-#define NRFX_CLOCK_CONFIG_LOG_ENABLED 0
+#define NRFX_CLOCK_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_CLOCK_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -1885,7 +1885,7 @@
 // <e> NRFX_COMP_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_COMP_CONFIG_LOG_ENABLED
-#define NRFX_COMP_CONFIG_LOG_ENABLED 0
+#define NRFX_COMP_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_COMP_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -1963,7 +1963,7 @@
 // <e> NRFX_GPIOTE_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_GPIOTE_CONFIG_LOG_ENABLED
-#define NRFX_GPIOTE_CONFIG_LOG_ENABLED 0
+#define NRFX_GPIOTE_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_GPIOTE_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -2064,7 +2064,7 @@
 // <e> NRFX_PDM_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_PDM_CONFIG_LOG_ENABLED
-#define NRFX_PDM_CONFIG_LOG_ENABLED 0
+#define NRFX_PDM_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_PDM_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -2160,7 +2160,7 @@
 // <e> NRFX_PPI_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_PPI_CONFIG_LOG_ENABLED
-#define NRFX_PPI_CONFIG_LOG_ENABLED 0
+#define NRFX_PPI_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_PPI_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -2248,7 +2248,7 @@
 // <e> NRFX_PRS_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_PRS_CONFIG_LOG_ENABLED
-#define NRFX_PRS_CONFIG_LOG_ENABLED 0
+#define NRFX_PRS_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_PRS_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -2400,7 +2400,7 @@
 // <e> NRFX_PWM_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_PWM_CONFIG_LOG_ENABLED
-#define NRFX_PWM_CONFIG_LOG_ENABLED 0
+#define NRFX_PWM_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_PWM_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -2547,7 +2547,7 @@
 // <e> NRFX_QDEC_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_QDEC_CONFIG_LOG_ENABLED
-#define NRFX_QDEC_CONFIG_LOG_ENABLED 0
+#define NRFX_QDEC_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_QDEC_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -2626,7 +2626,7 @@
 // <e> NRFX_RNG_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_RNG_CONFIG_LOG_ENABLED
-#define NRFX_RNG_CONFIG_LOG_ENABLED 0
+#define NRFX_RNG_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_RNG_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -2728,7 +2728,7 @@
 // <e> NRFX_RTC_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_RTC_CONFIG_LOG_ENABLED
-#define NRFX_RTC_CONFIG_LOG_ENABLED 0
+#define NRFX_RTC_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_RTC_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -2834,7 +2834,7 @@
 // <e> NRFX_SAADC_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_SAADC_CONFIG_LOG_ENABLED
-#define NRFX_SAADC_CONFIG_LOG_ENABLED 0
+#define NRFX_SAADC_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_SAADC_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -2923,7 +2923,7 @@
 // <e> NRFX_SPIM_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_SPIM_CONFIG_LOG_ENABLED
-#define NRFX_SPIM_CONFIG_LOG_ENABLED 0
+#define NRFX_SPIM_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_SPIM_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -3014,7 +3014,7 @@
 // <e> NRFX_SPIS_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_SPIS_CONFIG_LOG_ENABLED
-#define NRFX_SPIS_CONFIG_LOG_ENABLED 0
+#define NRFX_SPIS_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_SPIS_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -3114,7 +3114,7 @@
 // <e> NRFX_SWI_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_SWI_CONFIG_LOG_ENABLED
-#define NRFX_SWI_CONFIG_LOG_ENABLED 0
+#define NRFX_SWI_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_SWI_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -3242,7 +3242,7 @@
 // <e> NRFX_TIMER_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_TIMER_CONFIG_LOG_ENABLED
-#define NRFX_TIMER_CONFIG_LOG_ENABLED 0
+#define NRFX_TIMER_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_TIMER_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -3337,7 +3337,7 @@
 // <e> NRFX_TWIM_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_TWIM_CONFIG_LOG_ENABLED
-#define NRFX_TWIM_CONFIG_LOG_ENABLED 0
+#define NRFX_TWIM_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_TWIM_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -3462,7 +3462,7 @@
 // <e> NRFX_TWIS_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_TWIS_CONFIG_LOG_ENABLED
-#define NRFX_TWIS_CONFIG_LOG_ENABLED 0
+#define NRFX_TWIS_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_TWIS_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -3583,7 +3583,7 @@
 // <e> NRFX_UARTE_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_UARTE_CONFIG_LOG_ENABLED
-#define NRFX_UARTE_CONFIG_LOG_ENABLED 0
+#define NRFX_UARTE_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_UARTE_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -3673,7 +3673,7 @@
 // <e> NRFX_WDT_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_WDT_CONFIG_LOG_ENABLED
-#define NRFX_WDT_CONFIG_LOG_ENABLED 0
+#define NRFX_WDT_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_WDT_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -5711,7 +5711,7 @@
 // <e> MEM_MANAGER_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef MEM_MANAGER_CONFIG_LOG_ENABLED
-#define MEM_MANAGER_CONFIG_LOG_ENABLED 0
+#define MEM_MANAGER_CONFIG_LOG_ENABLED 1
 #endif
 // <o> MEM_MANAGER_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -6305,7 +6305,7 @@
 // <e> NRF_LOG_BACKEND_RTT_ENABLED - nrf_log_backend_rtt - Log RTT backend
 //==========================================================
 #ifndef NRF_LOG_BACKEND_RTT_ENABLED
-#define NRF_LOG_BACKEND_RTT_ENABLED 0
+#define NRF_LOG_BACKEND_RTT_ENABLED 1
 #endif
 // <o> NRF_LOG_BACKEND_RTT_TEMP_BUFFER_SIZE - Size of buffer for partially processed strings.
 // <i> Size of the buffer is a trade-off between RAM usage and processing.
@@ -6338,7 +6338,7 @@
 // <e> NRF_LOG_ENABLED - nrf_log - Logger
 //==========================================================
 #ifndef NRF_LOG_ENABLED
-#define NRF_LOG_ENABLED 0
+#define NRF_LOG_ENABLED 1
 #endif
 // <h> Log message pool - Configuration of log message pool
 
@@ -6530,7 +6530,7 @@
 // <e> NRF_MPU_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_MPU_CONFIG_LOG_ENABLED
-#define NRF_MPU_CONFIG_LOG_ENABLED 0
+#define NRF_MPU_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_MPU_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -6581,7 +6581,7 @@
 // <e> NRF_STACK_GUARD_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_STACK_GUARD_CONFIG_LOG_ENABLED
-#define NRF_STACK_GUARD_CONFIG_LOG_ENABLED 0
+#define NRF_STACK_GUARD_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_STACK_GUARD_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -6632,7 +6632,7 @@
 // <e> TASK_MANAGER_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef TASK_MANAGER_CONFIG_LOG_ENABLED
-#define TASK_MANAGER_CONFIG_LOG_ENABLED 0
+#define TASK_MANAGER_CONFIG_LOG_ENABLED 1
 #endif
 // <o> TASK_MANAGER_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -6689,7 +6689,7 @@
 // <e> CLOCK_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef CLOCK_CONFIG_LOG_ENABLED
-#define CLOCK_CONFIG_LOG_ENABLED 0
+#define CLOCK_CONFIG_LOG_ENABLED 1
 #endif
 // <o> CLOCK_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -6740,7 +6740,7 @@
 // <e> COMP_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef COMP_CONFIG_LOG_ENABLED
-#define COMP_CONFIG_LOG_ENABLED 0
+#define COMP_CONFIG_LOG_ENABLED 1
 #endif
 // <o> COMP_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -6791,7 +6791,7 @@
 // <e> GPIOTE_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef GPIOTE_CONFIG_LOG_ENABLED
-#define GPIOTE_CONFIG_LOG_ENABLED 0
+#define GPIOTE_CONFIG_LOG_ENABLED 1
 #endif
 // <o> GPIOTE_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -6842,7 +6842,7 @@
 // <e> LPCOMP_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef LPCOMP_CONFIG_LOG_ENABLED
-#define LPCOMP_CONFIG_LOG_ENABLED 0
+#define LPCOMP_CONFIG_LOG_ENABLED 1
 #endif
 // <o> LPCOMP_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -6893,7 +6893,7 @@
 // <e> MAX3421E_HOST_CONFIG_LOG_ENABLED - Enable logging in the module
 //==========================================================
 #ifndef MAX3421E_HOST_CONFIG_LOG_ENABLED
-#define MAX3421E_HOST_CONFIG_LOG_ENABLED 0
+#define MAX3421E_HOST_CONFIG_LOG_ENABLED 1
 #endif
 // <o> MAX3421E_HOST_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -6944,7 +6944,7 @@
 // <e> PDM_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef PDM_CONFIG_LOG_ENABLED
-#define PDM_CONFIG_LOG_ENABLED 0
+#define PDM_CONFIG_LOG_ENABLED 1
 #endif
 // <o> PDM_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -6995,7 +6995,7 @@
 // <e> PPI_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef PPI_CONFIG_LOG_ENABLED
-#define PPI_CONFIG_LOG_ENABLED 0
+#define PPI_CONFIG_LOG_ENABLED 1
 #endif
 // <o> PPI_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7046,7 +7046,7 @@
 // <e> PWM_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef PWM_CONFIG_LOG_ENABLED
-#define PWM_CONFIG_LOG_ENABLED 0
+#define PWM_CONFIG_LOG_ENABLED 1
 #endif
 // <o> PWM_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7097,7 +7097,7 @@
 // <e> QDEC_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef QDEC_CONFIG_LOG_ENABLED
-#define QDEC_CONFIG_LOG_ENABLED 0
+#define QDEC_CONFIG_LOG_ENABLED 1
 #endif
 // <o> QDEC_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7148,7 +7148,7 @@
 // <e> RNG_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef RNG_CONFIG_LOG_ENABLED
-#define RNG_CONFIG_LOG_ENABLED 0
+#define RNG_CONFIG_LOG_ENABLED 1
 #endif
 // <o> RNG_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7197,7 +7197,7 @@
 // <q> RNG_CONFIG_RANDOM_NUMBER_LOG_ENABLED  - Enables logging of random numbers.
 
 #ifndef RNG_CONFIG_RANDOM_NUMBER_LOG_ENABLED
-#define RNG_CONFIG_RANDOM_NUMBER_LOG_ENABLED 0
+#define RNG_CONFIG_RANDOM_NUMBER_LOG_ENABLED 1
 #endif
 
 // </e>
@@ -7205,7 +7205,7 @@
 // <e> RTC_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef RTC_CONFIG_LOG_ENABLED
-#define RTC_CONFIG_LOG_ENABLED 0
+#define RTC_CONFIG_LOG_ENABLED 1
 #endif
 // <o> RTC_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7256,7 +7256,7 @@
 // <e> SAADC_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef SAADC_CONFIG_LOG_ENABLED
-#define SAADC_CONFIG_LOG_ENABLED 0
+#define SAADC_CONFIG_LOG_ENABLED 1
 #endif
 // <o> SAADC_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7307,7 +7307,7 @@
 // <e> SPIS_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef SPIS_CONFIG_LOG_ENABLED
-#define SPIS_CONFIG_LOG_ENABLED 0
+#define SPIS_CONFIG_LOG_ENABLED 1
 #endif
 // <o> SPIS_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7358,7 +7358,7 @@
 // <e> SPI_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef SPI_CONFIG_LOG_ENABLED
-#define SPI_CONFIG_LOG_ENABLED 0
+#define SPI_CONFIG_LOG_ENABLED 1
 #endif
 // <o> SPI_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7409,7 +7409,7 @@
 // <e> TIMER_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef TIMER_CONFIG_LOG_ENABLED
-#define TIMER_CONFIG_LOG_ENABLED 0
+#define TIMER_CONFIG_LOG_ENABLED 1
 #endif
 // <o> TIMER_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7460,7 +7460,7 @@
 // <e> TWIS_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef TWIS_CONFIG_LOG_ENABLED
-#define TWIS_CONFIG_LOG_ENABLED 0
+#define TWIS_CONFIG_LOG_ENABLED 1
 #endif
 // <o> TWIS_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7511,7 +7511,7 @@
 // <e> TWI_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef TWI_CONFIG_LOG_ENABLED
-#define TWI_CONFIG_LOG_ENABLED 0
+#define TWI_CONFIG_LOG_ENABLED 1
 #endif
 // <o> TWI_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7562,7 +7562,7 @@
 // <e> UART_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef UART_CONFIG_LOG_ENABLED
-#define UART_CONFIG_LOG_ENABLED 0
+#define UART_CONFIG_LOG_ENABLED 1
 #endif
 // <o> UART_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7613,7 +7613,7 @@
 // <e> USBD_CONFIG_LOG_ENABLED - Enable logging in the module
 //==========================================================
 #ifndef USBD_CONFIG_LOG_ENABLED
-#define USBD_CONFIG_LOG_ENABLED 0
+#define USBD_CONFIG_LOG_ENABLED 1
 #endif
 // <o> USBD_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7664,7 +7664,7 @@
 // <e> WDT_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef WDT_CONFIG_LOG_ENABLED
-#define WDT_CONFIG_LOG_ENABLED 0
+#define WDT_CONFIG_LOG_ENABLED 1
 #endif
 // <o> WDT_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7721,7 +7721,7 @@
 // <e> APP_TIMER_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef APP_TIMER_CONFIG_LOG_ENABLED
-#define APP_TIMER_CONFIG_LOG_ENABLED 0
+#define APP_TIMER_CONFIG_LOG_ENABLED 1
 #endif
 // <o> APP_TIMER_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7787,7 +7787,7 @@
 // <e> APP_USBD_CDC_ACM_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef APP_USBD_CDC_ACM_CONFIG_LOG_ENABLED
-#define APP_USBD_CDC_ACM_CONFIG_LOG_ENABLED 0
+#define APP_USBD_CDC_ACM_CONFIG_LOG_ENABLED 1
 #endif
 // <o> APP_USBD_CDC_ACM_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7838,7 +7838,7 @@
 // <e> APP_USBD_CONFIG_LOG_ENABLED - Enable logging in the module.
 //==========================================================
 #ifndef APP_USBD_CONFIG_LOG_ENABLED
-#define APP_USBD_CONFIG_LOG_ENABLED 0
+#define APP_USBD_CONFIG_LOG_ENABLED 1
 #endif
 // <o> APP_USBD_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7889,7 +7889,7 @@
 // <e> APP_USBD_DUMMY_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef APP_USBD_DUMMY_CONFIG_LOG_ENABLED
-#define APP_USBD_DUMMY_CONFIG_LOG_ENABLED 0
+#define APP_USBD_DUMMY_CONFIG_LOG_ENABLED 1
 #endif
 // <o> APP_USBD_DUMMY_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7940,7 +7940,7 @@
 // <e> APP_USBD_MSC_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef APP_USBD_MSC_CONFIG_LOG_ENABLED
-#define APP_USBD_MSC_CONFIG_LOG_ENABLED 0
+#define APP_USBD_MSC_CONFIG_LOG_ENABLED 1
 #endif
 // <o> APP_USBD_MSC_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -7991,7 +7991,7 @@
 // <e> APP_USBD_NRF_DFU_TRIGGER_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef APP_USBD_NRF_DFU_TRIGGER_CONFIG_LOG_ENABLED
-#define APP_USBD_NRF_DFU_TRIGGER_CONFIG_LOG_ENABLED 0
+#define APP_USBD_NRF_DFU_TRIGGER_CONFIG_LOG_ENABLED 1
 #endif
 // <o> APP_USBD_NRF_DFU_TRIGGER_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -8042,7 +8042,7 @@
 // <e> NRF_ATFIFO_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_ATFIFO_CONFIG_LOG_ENABLED
-#define NRF_ATFIFO_CONFIG_LOG_ENABLED 0
+#define NRF_ATFIFO_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_ATFIFO_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -8105,7 +8105,7 @@
 // <e> NRF_BALLOC_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_BALLOC_CONFIG_LOG_ENABLED
-#define NRF_BALLOC_CONFIG_LOG_ENABLED 0
+#define NRF_BALLOC_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_BALLOC_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -8171,7 +8171,7 @@
 // <e> NRF_BLOCK_DEV_EMPTY_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_BLOCK_DEV_EMPTY_CONFIG_LOG_ENABLED
-#define NRF_BLOCK_DEV_EMPTY_CONFIG_LOG_ENABLED 0
+#define NRF_BLOCK_DEV_EMPTY_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_BLOCK_DEV_EMPTY_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -8234,7 +8234,7 @@
 // <e> NRF_BLOCK_DEV_QSPI_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_BLOCK_DEV_QSPI_CONFIG_LOG_ENABLED
-#define NRF_BLOCK_DEV_QSPI_CONFIG_LOG_ENABLED 0
+#define NRF_BLOCK_DEV_QSPI_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_BLOCK_DEV_QSPI_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -8297,7 +8297,7 @@
 // <e> NRF_BLOCK_DEV_RAM_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_BLOCK_DEV_RAM_CONFIG_LOG_ENABLED
-#define NRF_BLOCK_DEV_RAM_CONFIG_LOG_ENABLED 0
+#define NRF_BLOCK_DEV_RAM_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_BLOCK_DEV_RAM_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -8360,7 +8360,7 @@
 // <e> NRF_CLI_BLE_UART_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_CLI_BLE_UART_CONFIG_LOG_ENABLED
-#define NRF_CLI_BLE_UART_CONFIG_LOG_ENABLED 0
+#define NRF_CLI_BLE_UART_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_CLI_BLE_UART_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -8411,7 +8411,7 @@
 // <e> NRF_CLI_LIBUARTE_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_CLI_LIBUARTE_CONFIG_LOG_ENABLED
-#define NRF_CLI_LIBUARTE_CONFIG_LOG_ENABLED 0
+#define NRF_CLI_LIBUARTE_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_CLI_LIBUARTE_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -8462,7 +8462,7 @@
 // <e> NRF_CLI_UART_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_CLI_UART_CONFIG_LOG_ENABLED
-#define NRF_CLI_UART_CONFIG_LOG_ENABLED 0
+#define NRF_CLI_UART_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_CLI_UART_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -8513,7 +8513,7 @@
 // <e> NRF_LIBUARTE_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_LIBUARTE_CONFIG_LOG_ENABLED
-#define NRF_LIBUARTE_CONFIG_LOG_ENABLED 0
+#define NRF_LIBUARTE_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_LIBUARTE_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -8564,7 +8564,7 @@
 // <e> NRF_MEMOBJ_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_MEMOBJ_CONFIG_LOG_ENABLED
-#define NRF_MEMOBJ_CONFIG_LOG_ENABLED 0
+#define NRF_MEMOBJ_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_MEMOBJ_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -8615,7 +8615,7 @@
 // <e> NRF_PWR_MGMT_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_PWR_MGMT_CONFIG_LOG_ENABLED
-#define NRF_PWR_MGMT_CONFIG_LOG_ENABLED 0
+#define NRF_PWR_MGMT_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_PWR_MGMT_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -8666,7 +8666,7 @@
 // <e> NRF_QUEUE_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_QUEUE_CONFIG_LOG_ENABLED
-#define NRF_QUEUE_CONFIG_LOG_ENABLED 0
+#define NRF_QUEUE_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_QUEUE_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -8729,7 +8729,7 @@
 // <e> NRF_SDH_ANT_LOG_ENABLED - Enable logging in SoftDevice handler (ANT) module.
 //==========================================================
 #ifndef NRF_SDH_ANT_LOG_ENABLED
-#define NRF_SDH_ANT_LOG_ENABLED 0
+#define NRF_SDH_ANT_LOG_ENABLED 1
 #endif
 // <o> NRF_SDH_ANT_LOG_LEVEL  - Default Severity level
 
@@ -8780,7 +8780,7 @@
 // <e> NRF_SDH_BLE_LOG_ENABLED - Enable logging in SoftDevice handler (BLE) module.
 //==========================================================
 #ifndef NRF_SDH_BLE_LOG_ENABLED
-#define NRF_SDH_BLE_LOG_ENABLED 0
+#define NRF_SDH_BLE_LOG_ENABLED 1
 #endif
 // <o> NRF_SDH_BLE_LOG_LEVEL  - Default Severity level
 
@@ -8831,7 +8831,7 @@
 // <e> NRF_SDH_LOG_ENABLED - Enable logging in SoftDevice handler module.
 //==========================================================
 #ifndef NRF_SDH_LOG_ENABLED
-#define NRF_SDH_LOG_ENABLED 0
+#define NRF_SDH_LOG_ENABLED 1
 #endif
 // <o> NRF_SDH_LOG_LEVEL  - Default Severity level
 
@@ -8882,7 +8882,7 @@
 // <e> NRF_SDH_SOC_LOG_ENABLED - Enable logging in SoftDevice handler (SoC) module.
 //==========================================================
 #ifndef NRF_SDH_SOC_LOG_ENABLED
-#define NRF_SDH_SOC_LOG_ENABLED 0
+#define NRF_SDH_SOC_LOG_ENABLED 1
 #endif
 // <o> NRF_SDH_SOC_LOG_LEVEL  - Default Severity level
 
@@ -8933,7 +8933,7 @@
 // <e> NRF_SORTLIST_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_SORTLIST_CONFIG_LOG_ENABLED
-#define NRF_SORTLIST_CONFIG_LOG_ENABLED 0
+#define NRF_SORTLIST_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_SORTLIST_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -8984,7 +8984,7 @@
 // <e> NRF_TWI_SENSOR_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRF_TWI_SENSOR_CONFIG_LOG_ENABLED
-#define NRF_TWI_SENSOR_CONFIG_LOG_ENABLED 0
+#define NRF_TWI_SENSOR_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRF_TWI_SENSOR_CONFIG_LOG_LEVEL  - Default Severity level
 
@@ -9035,7 +9035,7 @@
 // <e> PM_LOG_ENABLED - Enable logging in Peer Manager and its submodules.
 //==========================================================
 #ifndef PM_LOG_ENABLED
-#define PM_LOG_ENABLED 0
+#define PM_LOG_ENABLED 1
 #endif
 // <o> PM_LOG_LEVEL  - Default Severity level
 
@@ -9092,7 +9092,7 @@
 // <e> SER_HAL_TRANSPORT_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef SER_HAL_TRANSPORT_CONFIG_LOG_ENABLED
-#define SER_HAL_TRANSPORT_CONFIG_LOG_ENABLED 0
+#define SER_HAL_TRANSPORT_CONFIG_LOG_ENABLED 1
 #endif
 // <o> SER_HAL_TRANSPORT_CONFIG_LOG_LEVEL  - Default Severity level
 

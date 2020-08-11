@@ -117,6 +117,7 @@ Output/ble_app_uart_pca10040e_s112\ Release/Obj/main.o: \
  ../../../../../../components/libraries/pwm/app_pwm.h \
  ../../../../../../components/libraries/log/nrf_log.h \
  ../../../../../../components/libraries/experimental_section_vars/nrf_section.h \
+ ../../../../../../components/libraries/strerror/nrf_strerror.h \
  ../../../../../../components/libraries/log/src/nrf_log_internal.h \
  ../../../../../../components/libraries/log/nrf_log_instance.h \
  ../../../../../../components/libraries/log/nrf_log_types.h \
@@ -124,6 +125,8 @@ Output/ble_app_uart_pca10040e_s112\ Release/Obj/main.o: \
  ../../../../../../components/libraries/log/nrf_log_ctrl.h \
  ../../../../../../components/libraries/log/src/nrf_log_ctrl_internal.h \
  ../../../../../../components/libraries/log/nrf_log_backend_interface.h \
+ ../../../../../../components/libraries/memobj/nrf_memobj.h \
+ ../../../../../../components/libraries/balloc/nrf_balloc.h \
  ../../../../../../components/libraries/log/nrf_log_default_backends.h \
  ../../../../../../components/libraries/fstorage/nrf_fstorage.h \
  ../../../../../../components/libraries/fstorage/nrf_fstorage_sd.h \

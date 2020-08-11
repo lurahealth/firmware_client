@@ -117,7 +117,7 @@
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define DEVICE_NAME                     "Lura_Health_Dan"                   /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "Lura_Test_Dan"                   /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
@@ -242,6 +242,9 @@ static       nrf_ppi_channel_t m_ppi_channel;
 
 
 // Forward declarations
+void create_bluetooth_packet(uint32_t ph_val, uint32_t batt_val,        
+                             uint32_t temp_val, float ph_val_cal,
+                             uint8_t* total_packet);
 void init_and_start_app_timer   (void);
 void send_data_and_restart_timer(void);
 void enable_pH_voltage_reading  (void);
@@ -259,6 +262,97 @@ void perform_calibration        (uint8_t cal_pts);
 double calculate_pH_from_mV     (uint32_t ph_val);
 static void advertising_start   (bool erase_bonds);
 uint32_t saadc_result_to_mv     (uint32_t saadc_result);
+
+/* 
+ * Buffers for storing data through System ON sleep periods
+ *
+ * Data will be appended to this buffer every time an advertising
+ * timeout occurs. If there is data stored in the buffer when a 
+ * connection is made, a "primer" packet containing total number
+ * of packets (one packet per data set in buffer) will be sent as
+ * one packet, and then the data will be sent in FIFO order. I.E.
+ * buffer[0] will contain the "oldest" data, buffer[n-1] will contain
+ * the "newest" data, and packets will be sent buffer[0] to buffer [n-1]
+ *
+ * Buffers can store five days worth of data. Data is collected once 
+ * every 15 minutes; 96 readings per day * 5 days = 480 readings.
+ * Each reading requires 10 bytes (3x uint16_t, 1x float), so this 
+ * buffer system can store 4.8kB of data.
+ */
+ #define DATA_BUFF_SIZE 480
+ uint16_t TOTAL_DATA_IN_BUFFERS = 0;
+
+ uint16_t ph_mv  [DATA_BUFF_SIZE];
+ uint16_t temp_mv[DATA_BUFF_SIZE];
+ uint16_t batt_mv[DATA_BUFF_SIZE];
+ float     ph_cal [DATA_BUFF_SIZE];
+
+// Function to initialize all buffers with values of 0
+ void init_data_buffers(void)
+ {
+    for(int i = 0; i < DATA_BUFF_SIZE; i++) {
+        ph_mv  [i] = 0;
+        temp_mv[i] = 0;
+        batt_mv[i] = 0;
+        ph_cal [i] = 0;
+    }
+ }
+
+/* Function to store data in buffer in case of advertising timeout
+ *
+ * On the next connection after timeouts causing data to be buffered,
+ * first add the most recent data to the buffer then call send_buffered_data()
+ */
+void add_data_to_buffers(void)
+{
+    // Values stored in ph_cal[i] may be zero while other values are
+    // non-zero. Iterate through ph_mv to find first "empty" buffer index
+    // and store data at the same index for other buffers
+    int i = 0;
+    while(ph_mv[i] != 0)
+        i++;
+    ph_mv[i]   = (uint16_t) AVG_PH_VAL;
+    temp_mv[i] = (uint16_t) AVG_TEMP_VAL;
+    batt_mv[i] = (uint16_t) AVG_BATT_VAL;
+    if(CAL_PERFORMED)
+        ph_cal[i] = (float) calculate_pH_from_mV(AVG_PH_VAL);
+    TOTAL_DATA_IN_BUFFERS++;
+}
+
+void send_buffered_data(void)
+{
+    uint32_t err_code;
+    // Send primer packet first
+    uint8_t primer = {'T','O','T','A','L','_',48,48,48};
+
+    // Iterate through buffers and send data
+    for(int i = 0; i < TOTAL_DATA_IN_BUFFERS; i++) {
+        // Create packet
+        create_bluetooth_packet((uint32_t)ph_mv[i], 
+                                (uint32_t)batt_mv[i], 
+                                (uint32_t)temp_mv[i], 
+                                 ph_cal[i], total_packet);
+        // Send data
+        do{
+             err_code = ble_nus_data_send(&m_nus, total_packet, 
+                                          &total_size, m_conn_handle);
+             NRF_LOG_INFO("error code: %u", err_code);
+             if ((err_code != NRF_ERROR_INVALID_STATE) &&
+                 (err_code != NRF_ERROR_RESOURCES) &&
+                 (err_code != NRF_ERROR_NOT_FOUND))
+             {
+                
+                    APP_ERROR_CHECK(err_code);              
+             }
+        } while (err_code == NRF_ERROR_RESOURCES);
+    }
+
+    // Disconnect
+    err_code = sd_ble_gap_disconnect(m_conn_handle, 
+                                     BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+    APP_ERROR_CHECK(err_code);
+}
+ 
 
 
 /**@brief Function for assert macro callback.
@@ -1126,9 +1220,8 @@ double calculate_pH_from_mV(uint32_t ph_val)
 }
 
 // Pack integer values into byte array to send via bluetooth
-void create_bluetooth_packet(uint32_t ph_val,
-                             uint32_t batt_val,        
-                             uint32_t temp_val, 
+void create_bluetooth_packet(uint32_t ph_val,   uint32_t batt_val,        
+                             uint32_t temp_val, float ph_val_cal,
                              uint8_t* total_packet)
 {
     /*
@@ -1152,7 +1245,15 @@ void create_bluetooth_packet(uint32_t ph_val,
     // If calibration has been performed, store eal pH in [0-3],
     // and store the raw millivolt data in the last field [15-18]
     else if (CAL_PERFORMED) {
-      double real_pH  = calculate_pH_from_mV(ph_val);
+      double real_pH = 0;
+      if (ph_val_cal == NULL) {
+        NRF_LOG_INFO("*** ph_val_cal == NULL ***");
+        real_pH = calculate_pH_from_mV(ph_val);
+      }
+      else if (ph_val_cal != NULL) {
+        NRF_LOG_INFO("*** ph_val_cal != NULL ***");
+        real_pH = ph_val_cal;
+      }
       double pH_decimal_vals = (real_pH - floor(real_pH)) * 100;
       // Round pH values to 0.25 pH accuracy
       pH_decimal_vals = round(pH_decimal_vals / 25) * 25;
@@ -1471,7 +1572,7 @@ void send_data_and_restart_timer()
 
     // Create packet
     create_bluetooth_packet(AVG_PH_VAL, AVG_BATT_VAL, 
-                            AVG_TEMP_VAL, total_packet);
+                            AVG_TEMP_VAL, NULL, total_packet);
     // Send data
     do
       {
@@ -1818,7 +1919,7 @@ int main(void)
 
     // Initialize fds and check for calibration values
     fds_init_helper();
-    //check_calibration_state();
+    check_calibration_state();
 
     // Continue with adjusted calibration state
     ble_stack_init();
@@ -1829,6 +1930,9 @@ int main(void)
     advertising_init();
     conn_params_init();
     peer_manager_init();
+
+    // Init long-term data storage buffers
+    init_data_buffers();
     
     // Start intermittent data reading <> advertising protocol
     enable_isfet_circuit();
