@@ -124,13 +124,13 @@
 
 #define APP_ADV_INTERVAL                325                                         /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
 
-#define APP_ADV_DURATION                500                                         /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
+#define APP_ADV_DURATION                300                                         /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
 
-#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (200 ms), Connection interval uses 1.25 ms units. */
+#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(40, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(80, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (200 ms), Connection interval uses 1.25 ms units. */
 #define SLAVE_LATENCY                   0                                           /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(5000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
-#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000)                       /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
+#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(10000)                       /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(30000)                      /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT    3                                           /**< Number of attempts before giving up the connection parameter negotiation. */
 
@@ -150,7 +150,7 @@
 
 #define SAMPLES_IN_BUFFER               50                                          /**< SAADC buffer > */
 
-#define DATA_INTERVAL                   10000
+#define DATA_INTERVAL                   500
 
 
 #define NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(PIN_P) \
@@ -194,6 +194,10 @@ static ble_uuid_t m_adv_uuids[]          =                                      
 uint32_t AVG_PH_VAL        = 0;
 uint32_t AVG_BATT_VAL      = 0;
 uint32_t AVG_TEMP_VAL      = 0;
+uint32_t HVN_COUNTER       = 0;
+uint32_t PACK_CTR          = 0;
+bool     SEND_BUFFERED_DATA  = false;
+bool     HVN_TX_EVT_COMPLETE = false;
 bool     PH_IS_READ        = false;
 bool     BATTERY_IS_READ   = false;
 bool     SAADC_CALIBRATED  = false;
@@ -257,6 +261,7 @@ void turn_chip_power_off         (void);
 void restart_saadc              (void);
 void restart_pH_interval_timer  (void);
 void write_cal_values_to_flash   (void);
+void check_for_buffer_done_signal(char **packet);
 void linreg                     (int num, double x[], double y[]);
 void perform_calibration        (uint8_t cal_pts);
 double calculate_pH_from_mV     (uint32_t ph_val);
@@ -279,7 +284,7 @@ uint32_t saadc_result_to_mv     (uint32_t saadc_result);
  * Each reading requires 10 bytes (3x uint16_t, 1x float), so this 
  * buffer system can store 4.8kB of data.
  */
- #define DATA_BUFF_SIZE 480
+ #define DATA_BUFF_SIZE 280
  uint16_t TOTAL_DATA_IN_BUFFERS = 0;
 
  uint16_t ph_mv  [DATA_BUFF_SIZE];
@@ -296,6 +301,21 @@ uint32_t saadc_result_to_mv     (uint32_t saadc_result);
         batt_mv[i] = 0;
         ph_cal [i] = 0;
     }
+ }
+
+ void reset_data_buffers(void)
+ {
+    NRF_LOG_INFO("RESETTING PH BUFFERS");
+    int i = 0;
+    while(ph_mv[i] != 0) {
+        ph_mv  [i] = 0;
+        temp_mv[i] = 0;
+        batt_mv[i] = 0;
+        ph_cal [i] = 0;
+        i++;
+    }
+    TOTAL_DATA_IN_BUFFERS = 0;
+    PACK_CTR = 0;
  }
 
 /* Function to store data in buffer in case of advertising timeout
@@ -319,38 +339,127 @@ void add_data_to_buffers(void)
     TOTAL_DATA_IN_BUFFERS++;
 }
 
+void create_and_send_buffer_primer_packet(void)
+{
+    uint32_t err_code;
+    uint32_t ASCII_DIG_BASE = 48;
+    uint16_t primer_len = 10;
+    // Format and send primer packet first
+    uint8_t primer[] = {'T','O','T','A','L','_',48,48,48,10};
+    uint32_t temp = TOTAL_DATA_IN_BUFFERS;
+    NRF_LOG_INFO("Total data in buffers: %d", TOTAL_DATA_IN_BUFFERS);
+    // Packing protocol for number abc: 
+    // [... 0, 0, c] --> [... 0, b, c] --> [... a, b, c]
+    for(int i = primer_len - 2; i > 5; i--) {
+        if (i == primer_len - 2) primer[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
+        else {
+            temp = temp / 10;
+            primer[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
+        }
+    }
+    // Send primer packet
+    do{
+         err_code = ble_nus_data_send(&m_nus, primer, &primer_len, m_conn_handle);
+         NRF_LOG_INFO("error code: %u", err_code);
+         if ((err_code != NRF_ERROR_INVALID_STATE) &&
+             (err_code != NRF_ERROR_RESOURCES) &&
+             (err_code != NRF_ERROR_NOT_FOUND))
+         {
+                
+                APP_ERROR_CHECK(err_code);              
+         }
+         nrf_delay_us(100);
+    } while (err_code == NRF_ERROR_RESOURCES);
+}
+
 void send_buffered_data(void)
 {
     uint32_t err_code;
-    // Send primer packet first
-    uint8_t primer = {'T','O','T','A','L','_',48,48,48};
+    HVN_COUNTER = 0;
+
+    // Let the central know how many packets to expect
+    //create_and_send_buffer_primer_packet();
+
+         // Create packet
+        create_bluetooth_packet((uint32_t)ph_mv[PACK_CTR], 
+                                (uint32_t)batt_mv[PACK_CTR], 
+                                (uint32_t)temp_mv[PACK_CTR], 
+                                 ph_cal[PACK_CTR], total_packet);
+        do {
+            err_code = ble_nus_data_send(&m_nus, total_packet, 
+                                         &total_size, m_conn_handle);
+            if ((err_code != NRF_ERROR_INVALID_STATE) &&
+                (err_code != NRF_ERROR_RESOURCES) &&
+                (err_code != NRF_ERROR_NOT_FOUND))
+            {   
+                APP_ERROR_CHECK(err_code);              
+            }
+        } while (err_code == NRF_ERROR_RESOURCES);
+
+    // Send buffered data, waiting for hvn tx events
+//    for(int i = 0; i < TOTAL_DATA_IN_BUFFERS; i++) {
+//        // Create packet
+//        create_bluetooth_packet((uint32_t)ph_mv[i], 
+//                                (uint32_t)batt_mv[i], 
+//                                (uint32_t)temp_mv[i], 
+//                                 ph_cal[i], total_packet);
+//        err_code = ble_nus_data_send(&m_nus, total_packet, 
+//                                     &total_size, m_conn_handle);
+//        if ((err_code != NRF_ERROR_INVALID_STATE) &&
+//            (err_code != NRF_ERROR_RESOURCES) &&
+//            (err_code != NRF_ERROR_NOT_FOUND))
+//        {   
+//            APP_ERROR_CHECK(err_code);              
+//        }
+//        while(!HVN_TX_EVT_COMPLETE);
+//        HVN_TX_EVT_COMPLETE = false;
+//    }
 
     // Iterate through buffers and send data
-    for(int i = 0; i < TOTAL_DATA_IN_BUFFERS; i++) {
+//    for(int i = 0; i < TOTAL_DATA_IN_BUFFERS; i++) {
         // Create packet
-        create_bluetooth_packet((uint32_t)ph_mv[i], 
-                                (uint32_t)batt_mv[i], 
-                                (uint32_t)temp_mv[i], 
-                                 ph_cal[i], total_packet);
-        // Send data
-        do{
-             err_code = ble_nus_data_send(&m_nus, total_packet, 
-                                          &total_size, m_conn_handle);
-             NRF_LOG_INFO("error code: %u", err_code);
-             if ((err_code != NRF_ERROR_INVALID_STATE) &&
-                 (err_code != NRF_ERROR_RESOURCES) &&
-                 (err_code != NRF_ERROR_NOT_FOUND))
-             {
-                
-                    APP_ERROR_CHECK(err_code);              
-             }
-        } while (err_code == NRF_ERROR_RESOURCES);
-    }
+//        create_bluetooth_packet((uint32_t)ph_mv[i], 
+//                                (uint32_t)batt_mv[i], 
+//                                (uint32_t)temp_mv[i], 
+//                                 ph_cal[i], total_packet);
+            // Send data
+//            do{
+//                 HVN_TX_EVT_COMPLETE = false;
+//                 err_code = ble_nus_data_send(&m_nus, total_packet, 
+//                                              &total_size, m_conn_handle);
+//                 //NRF_LOG_INFO("error code: %u", err_code);
+//                 if ((err_code != NRF_ERROR_INVALID_STATE) &&
+//                     (err_code != NRF_ERROR_RESOURCES) &&
+//                     (err_code != NRF_ERROR_NOT_FOUND))
+//                 {
+//                
+//                        APP_ERROR_CHECK(err_code);              
+//                 }
+//            } while (err_code == NRF_ERROR_RESOURCES);
+        nrf_delay_ms(100);
+        NRF_LOG_INFO("%d PACKETS SENT", PACK_CTR+1);
+        //NRF_LOG_FLUSH();
+//    }
+//    err_code = sd_ble_gap_disconnect(m_conn_handle, 
+//                                         BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+//    APP_ERROR_CHECK(err_code);
+    // Don't disconnect manually, the central will send a "DONE" packet
+    // when all data has been received. Application will go back to sleep
+    // after this packet is received
+}
 
-    // Disconnect
-    err_code = sd_ble_gap_disconnect(m_conn_handle, 
-                                     BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-    APP_ERROR_CHECK(err_code);
+void check_for_buffer_done_signal(char **packet)
+{
+    NRF_LOG_INFO("Checking received packet for done signal...");
+    char *DONE  = "DONE";
+    if (strstr(*packet, DONE) != NULL){
+        NRF_LOG_INFO("Received DONE signal");
+        // Disconnect
+        uint32_t err_code;
+        err_code = sd_ble_gap_disconnect(m_conn_handle, 
+                                         BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+        APP_ERROR_CHECK(err_code);
+    }
 }
  
 
@@ -687,6 +796,7 @@ void nus_data_handler(ble_nus_evt_t * p_evt)
 
     if (p_evt->type == BLE_NUS_EVT_RX_DATA)
     {
+        NRF_LOG_INFO("RECEIVED DATA FROM NUS DATA HANDLER");
         // Array to store data received by smartphone will never exceed 9 characters
         char data[10];
         // Pointer to array
@@ -713,6 +823,7 @@ void nus_data_handler(ble_nus_evt_t * p_evt)
         }
         // Check pack for calibration protocol details
         check_for_calibration(&data_ptr);
+        check_for_buffer_done_signal(&data_ptr);
     }
 
     if (p_evt->type == BLE_NUS_EVT_COMM_STARTED)
@@ -862,6 +973,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     {
         case 38:
             NRF_LOG_INFO("CASE 38\n");
+            add_data_to_buffers();
             init_and_start_app_timer();
             break;
 
@@ -943,6 +1055,12 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
         case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
             NRF_LOG_INFO("BLE_GAP_EVT_SEC_PARAMS_REQUEST");
+            break;
+
+        case BLE_GATTS_EVT_HVN_TX_COMPLETE:
+            HVN_COUNTER++;   
+            NRF_LOG_INFO("EVT HVN TX COMPLETED, total evts: %d\n", HVN_COUNTER);
+            HVN_TX_EVT_COMPLETE = true;
             break;
 
         default:
@@ -1569,29 +1687,50 @@ void timers_init(void)
 void send_data_and_restart_timer()
 {
     uint32_t err_code;
-
-    // Create packet
-    create_bluetooth_packet(AVG_PH_VAL, AVG_BATT_VAL, 
-                            AVG_TEMP_VAL, NULL, total_packet);
-    // Send data
-    do
-      {
-         err_code = ble_nus_data_send(&m_nus, total_packet, 
-                                      &total_size, m_conn_handle);
-         NRF_LOG_INFO("error code: %u", err_code);
-         if ((err_code != NRF_ERROR_INVALID_STATE) &&
-             (err_code != NRF_ERROR_RESOURCES) &&
-             (err_code != NRF_ERROR_NOT_FOUND))
-         {
+    
+    // Send data normally if there is no buffered data
+    if (TOTAL_DATA_IN_BUFFERS == 0){
+        // Create packet
+        create_bluetooth_packet(AVG_PH_VAL, AVG_BATT_VAL, 
+                                AVG_TEMP_VAL, NULL, total_packet);
+        // Send data
+        do
+          {
+             err_code = ble_nus_data_send(&m_nus, total_packet, 
+                                          &total_size, m_conn_handle);
+             NRF_LOG_INFO("error code: %u", err_code);
+             if ((err_code != NRF_ERROR_INVALID_STATE) &&
+                 (err_code != NRF_ERROR_RESOURCES) &&
+                 (err_code != NRF_ERROR_NOT_FOUND))
+             {
                 
-                APP_ERROR_CHECK(err_code);              
-         }
-      } while (err_code == NRF_ERROR_RESOURCES);
+                    APP_ERROR_CHECK(err_code);              
+             }
+          } while (err_code == NRF_ERROR_RESOURCES);
+          // Disconnect
+          err_code = sd_ble_gap_disconnect(m_conn_handle, 
+                                           BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+          APP_ERROR_CHECK(err_code);
+    }
+    // Add most recent data to buffer, then send all data in buffer
+    else {
+        add_data_to_buffers();
+        create_and_send_buffer_primer_packet();
+        SEND_BUFFERED_DATA = true;
+//        add_data_to_buffers();
+//        create_and_send_buffer_primer_packet();
+//        for (int i = 0; i < TOTAL_DATA_IN_BUFFERS; i++) {
+ //           while(!HVN_TX_EVT_COMPLETE);
+//            send_buffered_data();
+//            PACK_CTR++;
+  //          HVN_TX_EVT_COMPLETE = false;
+    //    }
+//        send_buffered_data();
+//        reset_data_buffers();   // Reset buffers to contain all zeros
+        // Application will disconnect when "DONE" packet is received
+    }
 
-    // Disconnect
-    err_code = sd_ble_gap_disconnect(m_conn_handle, 
-                                     BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-    APP_ERROR_CHECK(err_code);
+    
 }
 
 /**@brief Function for handling events from the GATT library. */
@@ -1905,6 +2044,22 @@ void write_cal_values_to_flash(void)
     }
 }
 
+void send_next_packet_in_buffer()
+{
+     send_buffered_data();
+     PACK_CTR++;
+     HVN_TX_EVT_COMPLETE = false;
+     // Reset buffers, variables, and disconnect when finished 
+     if (PACK_CTR == TOTAL_DATA_IN_BUFFERS) {
+         reset_data_buffers();
+         SEND_BUFFERED_DATA = false;
+//       err_code = 
+//            sd_ble_gap_disconnect(m_conn_handle, 
+//                                  BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+//       APP_ERROR_CHECK(err_code);
+      }
+}
+
 /**@brief Application main function.
  */
 int main(void)
@@ -1943,6 +2098,13 @@ int main(void)
     while (true)
     {
         idle_state_handle();
+        // If data has been buffered then send accordingly, 
+        // waiting for BLE_GATTS_EVT_HVN_TX_COMPLETE in 
+        // between packets so the tx buffer is not filled
+        if (SEND_BUFFERED_DATA) {
+            while(HVN_TX_EVT_COMPLETE == false) {break;}
+            send_next_packet_in_buffer();
+        }
     } 
 }
 
