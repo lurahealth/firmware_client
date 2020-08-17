@@ -150,7 +150,7 @@
 
 #define SAMPLES_IN_BUFFER               50                                          /**< SAADC buffer > */
 
-#define DATA_INTERVAL                   500
+#define DATA_INTERVAL                   5000
 
 
 #define NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(PIN_P) \
@@ -266,6 +266,7 @@ void linreg                     (int num, double x[], double y[]);
 void perform_calibration        (uint8_t cal_pts);
 double calculate_pH_from_mV     (uint32_t ph_val);
 static void advertising_start   (bool erase_bonds);
+static void idle_state_handle    (void);
 uint32_t saadc_result_to_mv     (uint32_t saadc_result);
 
 /* 
@@ -329,8 +330,7 @@ void add_data_to_buffers(void)
     // non-zero. Iterate through ph_mv to find first "empty" buffer index
     // and store data at the same index for other buffers
     int i = 0;
-    while(ph_mv[i] != 0)
-        i++;
+    while(ph_mv[i] != 0) { i++; }
     ph_mv[i]   = (uint16_t) AVG_PH_VAL;
     temp_mv[i] = (uint16_t) AVG_TEMP_VAL;
     batt_mv[i] = (uint16_t) AVG_BATT_VAL;
@@ -392,8 +392,6 @@ void send_buffered_data(void)
             APP_ERROR_CHECK(err_code);              
         }
     } while (err_code == NRF_ERROR_RESOURCES);
-
-    nrf_delay_ms(100);
     NRF_LOG_INFO("%d PACKETS SENT", PACK_CTR+1);
 }
 
@@ -922,7 +920,14 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     {
         case 38:
             NRF_LOG_INFO("CASE 38\n");
-            add_data_to_buffers();
+            // Store data in buffer if there is space remaining
+            if (TOTAL_DATA_IN_BUFFERS < DATA_BUFF_SIZE - 1)
+                add_data_to_buffers();
+                /* 
+                 * TO DO: Figure out how to compress data if buffer
+                 *        fills up to 480. Unlikely, but application
+                 *        should be able to handle this.
+                 */
             init_and_start_app_timer();
             break;
 
@@ -931,6 +936,8 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
             APP_ERROR_CHECK(err_code);
             CONNECTION_MADE = true;
+            // Set TX power to highest setting
+            sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, m_conn_handle, 4);
 
             NRF_LOG_INFO("CONNECTION MADE (ble_gap_evt) \n");
 
@@ -1118,6 +1125,9 @@ static void advertising_init(void)
     APP_ERROR_CHECK(err_code);
 
     ble_advertising_conn_cfg_tag_set(&m_advertising, APP_BLE_CONN_CFG_TAG);
+
+    // Set TX power to highest setting
+    sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, m_advertising.adv_handle, 4);
 }
 
 
@@ -1984,6 +1994,7 @@ void write_cal_values_to_flash(void)
 
 void send_next_packet_in_buffer()
 {
+     uint32_t err_code;
      send_buffered_data();
      PACK_CTR++;
      HVN_TX_EVT_COMPLETE = false;
@@ -1991,10 +2002,10 @@ void send_next_packet_in_buffer()
      if (PACK_CTR == TOTAL_DATA_IN_BUFFERS) {
          reset_data_buffers();
          SEND_BUFFERED_DATA = false;
-//       err_code = 
-//            sd_ble_gap_disconnect(m_conn_handle, 
-//                                  BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-//       APP_ERROR_CHECK(err_code);
+       err_code = 
+            sd_ble_gap_disconnect(m_conn_handle, 
+                                  BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+       APP_ERROR_CHECK(err_code);
       }
 }
 
@@ -2040,7 +2051,7 @@ int main(void)
         // waiting for BLE_GATTS_EVT_HVN_TX_COMPLETE in 
         // between packets so the tx buffer is not filled
         if (SEND_BUFFERED_DATA) {
-            while(HVN_TX_EVT_COMPLETE == false) {break;}
+            while(HVN_TX_EVT_COMPLETE == false) { break; }
             send_next_packet_in_buffer();
         }
     } 
