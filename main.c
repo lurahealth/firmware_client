@@ -284,7 +284,7 @@ uint32_t saadc_result_to_mv     (uint32_t saadc_result);
  * Each reading requires 10 bytes (3x uint16_t, 1x float), so this 
  * buffer system can store 4.8kB of data.
  */
- #define DATA_BUFF_SIZE 280
+ #define DATA_BUFF_SIZE 480
  uint16_t TOTAL_DATA_IN_BUFFERS = 0;
 
  uint16_t ph_mv  [DATA_BUFF_SIZE];
@@ -377,75 +377,24 @@ void send_buffered_data(void)
     uint32_t err_code;
     HVN_COUNTER = 0;
 
-    // Let the central know how many packets to expect
-    //create_and_send_buffer_primer_packet();
+    // Create packet
+    create_bluetooth_packet((uint32_t)ph_mv[PACK_CTR], 
+                            (uint32_t)batt_mv[PACK_CTR], 
+                            (uint32_t)temp_mv[PACK_CTR], 
+                             ph_cal[PACK_CTR], total_packet);
+    do {
+        err_code = ble_nus_data_send(&m_nus, total_packet, 
+                                     &total_size, m_conn_handle);
+        if ((err_code != NRF_ERROR_INVALID_STATE) &&
+            (err_code != NRF_ERROR_RESOURCES) &&
+            (err_code != NRF_ERROR_NOT_FOUND))
+        {   
+            APP_ERROR_CHECK(err_code);              
+        }
+    } while (err_code == NRF_ERROR_RESOURCES);
 
-         // Create packet
-        create_bluetooth_packet((uint32_t)ph_mv[PACK_CTR], 
-                                (uint32_t)batt_mv[PACK_CTR], 
-                                (uint32_t)temp_mv[PACK_CTR], 
-                                 ph_cal[PACK_CTR], total_packet);
-        do {
-            err_code = ble_nus_data_send(&m_nus, total_packet, 
-                                         &total_size, m_conn_handle);
-            if ((err_code != NRF_ERROR_INVALID_STATE) &&
-                (err_code != NRF_ERROR_RESOURCES) &&
-                (err_code != NRF_ERROR_NOT_FOUND))
-            {   
-                APP_ERROR_CHECK(err_code);              
-            }
-        } while (err_code == NRF_ERROR_RESOURCES);
-
-    // Send buffered data, waiting for hvn tx events
-//    for(int i = 0; i < TOTAL_DATA_IN_BUFFERS; i++) {
-//        // Create packet
-//        create_bluetooth_packet((uint32_t)ph_mv[i], 
-//                                (uint32_t)batt_mv[i], 
-//                                (uint32_t)temp_mv[i], 
-//                                 ph_cal[i], total_packet);
-//        err_code = ble_nus_data_send(&m_nus, total_packet, 
-//                                     &total_size, m_conn_handle);
-//        if ((err_code != NRF_ERROR_INVALID_STATE) &&
-//            (err_code != NRF_ERROR_RESOURCES) &&
-//            (err_code != NRF_ERROR_NOT_FOUND))
-//        {   
-//            APP_ERROR_CHECK(err_code);              
-//        }
-//        while(!HVN_TX_EVT_COMPLETE);
-//        HVN_TX_EVT_COMPLETE = false;
-//    }
-
-    // Iterate through buffers and send data
-//    for(int i = 0; i < TOTAL_DATA_IN_BUFFERS; i++) {
-        // Create packet
-//        create_bluetooth_packet((uint32_t)ph_mv[i], 
-//                                (uint32_t)batt_mv[i], 
-//                                (uint32_t)temp_mv[i], 
-//                                 ph_cal[i], total_packet);
-            // Send data
-//            do{
-//                 HVN_TX_EVT_COMPLETE = false;
-//                 err_code = ble_nus_data_send(&m_nus, total_packet, 
-//                                              &total_size, m_conn_handle);
-//                 //NRF_LOG_INFO("error code: %u", err_code);
-//                 if ((err_code != NRF_ERROR_INVALID_STATE) &&
-//                     (err_code != NRF_ERROR_RESOURCES) &&
-//                     (err_code != NRF_ERROR_NOT_FOUND))
-//                 {
-//                
-//                        APP_ERROR_CHECK(err_code);              
-//                 }
-//            } while (err_code == NRF_ERROR_RESOURCES);
-        nrf_delay_ms(100);
-        NRF_LOG_INFO("%d PACKETS SENT", PACK_CTR+1);
-        //NRF_LOG_FLUSH();
-//    }
-//    err_code = sd_ble_gap_disconnect(m_conn_handle, 
-//                                         BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-//    APP_ERROR_CHECK(err_code);
-    // Don't disconnect manually, the central will send a "DONE" packet
-    // when all data has been received. Application will go back to sleep
-    // after this packet is received
+    nrf_delay_ms(100);
+    NRF_LOG_INFO("%d PACKETS SENT", PACK_CTR+1);
 }
 
 void check_for_buffer_done_signal(char **packet)
@@ -1626,7 +1575,7 @@ void restart_pH_interval_timer(void)
       APP_ERROR_CHECK(err_code);
 }
 
-/* Function unitializes and disables SAADC sampling, restarts 1 second timer
+/* Function unitializes and disables SAADC sampling, restarts timer
  */
 void disable_pH_voltage_reading(void)
 {
@@ -1717,17 +1666,6 @@ void send_data_and_restart_timer()
         add_data_to_buffers();
         create_and_send_buffer_primer_packet();
         SEND_BUFFERED_DATA = true;
-//        add_data_to_buffers();
-//        create_and_send_buffer_primer_packet();
-//        for (int i = 0; i < TOTAL_DATA_IN_BUFFERS; i++) {
- //           while(!HVN_TX_EVT_COMPLETE);
-//            send_buffered_data();
-//            PACK_CTR++;
-  //          HVN_TX_EVT_COMPLETE = false;
-    //    }
-//        send_buffered_data();
-//        reset_data_buffers();   // Reset buffers to contain all zeros
-        // Application will disconnect when "DONE" packet is received
     }
 
     
