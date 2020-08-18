@@ -77,7 +77,9 @@
     </folder>
     <folder Name="nRF_Drivers">
       <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_clock.c" />
-      <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_uart.c" />
+      <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_uart.c">
+        <configuration Name="Release" build_exclude_from_build="No" />
+      </file>
       <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_clock.c" />
       <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_gpiote.c" />
       <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_power_clock.c" />
@@ -136,15 +138,15 @@
       <file file_name="../../../../../../components/softdevice/common/nrf_sdh_ble.c" />
       <file file_name="../../../../../../components/softdevice/common/nrf_sdh_soc.c" />
     </folder>
+    <configuration
+      Name="Release"
+      c_user_include_directories=".\;../../../../../../components/libraries/fds\;../../../../../../components/libraries/fstorage\;../../../../../../components/libraries/experimental_section_vars\;../../../../../../components/ble/peer_manager/"
+      gcc_optimization_level="Level 1"
+      linker_output_format="hex" />
     <folder Name="Application">
       <file file_name="../../../main.c" />
       <file file_name="../config/sdk_config.h" />
     </folder>
-    <configuration
-      Name="Release"
-      c_user_include_directories=".\;../../../../../../components/libraries/fds\;../../../../../../components/libraries/fstorage\;../../../../../../components/libraries/experimental_section_vars\;../../../../../../components/ble/peer_manager/"
-      gcc_optimization_level="Optimize For Size"
-      linker_output_format="hex" />
   </project>
   <configuration
     Name="Release"
