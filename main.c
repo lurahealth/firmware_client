@@ -150,7 +150,7 @@
 
 #define SAMPLES_IN_BUFFER               50                                          /**< SAADC buffer > */
 
-#define DATA_INTERVAL                   5000
+#define DATA_INTERVAL                   500
 
 
 #define NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(PIN_P) \
@@ -1469,7 +1469,7 @@ void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
 // Read saadc values for temperature, battery level, and pH to store for calibration
 void read_saadc_for_regular_protocol(void) 
 {
-    int NUM_SAMPLES = 30;
+    int NUM_SAMPLES = 100;
     nrf_saadc_value_t temp_val = 0;
     ret_code_t err_code;
     uint32_t AVG_MV_VAL = 0;
@@ -1478,7 +1478,7 @@ void read_saadc_for_regular_protocol(void)
       err_code = nrfx_saadc_sample_convert(0, &temp_val);
       APP_ERROR_CHECK(err_code);
       AVG_MV_VAL += saadc_result_to_mv(temp_val);
-      nrf_delay_us(5);
+      nrf_delay_us(15);
     }
     AVG_MV_VAL = AVG_MV_VAL / NUM_SAMPLES;
     // Assign averaged readings to the correct calibration point
