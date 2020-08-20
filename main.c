@@ -150,7 +150,7 @@
 
 #define SAMPLES_IN_BUFFER               50                                          /**< SAADC buffer > */
 
-#define DATA_INTERVAL                   500
+#define DATA_INTERVAL                   900000
 
 
 #define NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(PIN_P) \
@@ -1638,8 +1638,8 @@ void timers_init(void)
     err_code = app_timer_init();
     APP_ERROR_CHECK(err_code);
     err_code = app_timer_create(&m_timer_id,
-                                  APP_TIMER_MODE_SINGLE_SHOT,
-                                  single_shot_timer_handler);
+                                APP_TIMER_MODE_SINGLE_SHOT,
+                                single_shot_timer_handler);
     APP_ERROR_CHECK(err_code);
 }
 
