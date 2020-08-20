@@ -117,17 +117,17 @@
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define DEVICE_NAME                     "Lura_Test_Dan"                   /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "Lura_Test"                                 /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 
-#define APP_ADV_INTERVAL                325                                         /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
+#define APP_ADV_INTERVAL                400                                         /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
 
-#define APP_ADV_DURATION                300                                         /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
+#define APP_ADV_DURATION                1000                                        /**< The advertising duration in units of 10 milliseconds. */
 
-#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(40, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(80, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (200 ms), Connection interval uses 1.25 ms units. */
+#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(40, UNIT_1_25_MS)             /**< Minimum acceptable connection interval, Connection interval uses 1.25 ms units. */
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(80, UNIT_1_25_MS)             /**< Maximum acceptable connection interval, Connection interval uses 1.25 ms units. */
 #define SLAVE_LATENCY                   0                                           /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(5000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(10000)                       /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
@@ -150,7 +150,7 @@
 
 #define SAMPLES_IN_BUFFER               50                                          /**< SAADC buffer > */
 
-#define DATA_INTERVAL                   900000
+#define DATA_INTERVAL                   10000
 
 
 #define NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(PIN_P) \
@@ -177,6 +177,12 @@ NRF_BLE_GATT_DEF(m_gatt);                                                       
 NRF_BLE_QWR_DEF(m_qwr);                                                             /**< Context for the Queued Write module.*/
 BLE_ADVERTISING_DEF(m_advertising);                                                 /**< Advertising module instance. */
 APP_TIMER_DEF(m_timer_id);
+
+// Timer and control flag to enable delay before disconnecting
+APP_TIMER_DEF(m_timer_disconn_delay);
+bool   DISCONN_DELAY    = true;
+#define DISCONN_DELAY_MS   15000 
+
 
 static uint16_t   m_conn_handle          = BLE_CONN_HANDLE_INVALID;                 /**< Handle of the current connection. */
 static uint16_t   m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - 3;            /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
@@ -259,7 +265,6 @@ void disable_isfet_circuit      (void);
 void turn_chip_power_on         (void);
 void turn_chip_power_off         (void);
 void restart_saadc              (void);
-void restart_pH_interval_timer  (void);
 void write_cal_values_to_flash   (void);
 void check_for_buffer_done_signal(char **packet);
 void linreg                     (int num, double x[], double y[]);
@@ -534,13 +539,13 @@ void read_saadc_for_calibration(void)
     int NUM_SAMPLES = 50;
     nrf_saadc_value_t temp_val = 0;
     ret_code_t err_code;
-    disable_pH_voltage_reading();
+//    disable_pH_voltage_reading();
     AVG_PH_VAL = 0;
     READ_CAL_DATA = true;
     PH_IS_READ = false;
     // Make sure isfet circuit is enabled for saadc readings
-    enable_isfet_circuit();
-    nrf_delay_ms(10);
+//    enable_isfet_circuit();
+//    nrf_delay_ms(10);
     // Take saadc readings for pH, temp and battery
     enable_pH_voltage_reading();
     for (int i = 0; i < NUM_SAMPLES; i++) {
@@ -621,6 +626,21 @@ void perform_calibration(uint8_t cal_pts)
   }
 }
 
+void stop_disconn_delay_timer()
+{
+    ret_code_t err_code;
+    err_code = app_timer_stop(m_timer_disconn_delay);
+    APP_ERROR_CHECK(err_code);
+}
+
+void disconnect_from_central()
+{
+    uint32_t err_code;
+    err_code = sd_ble_gap_disconnect(m_conn_handle, 
+                                     BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+    APP_ERROR_CHECK(err_code);
+}
+
 /*
  * Checks packet contents to appropriately perform calibration
  */
@@ -655,6 +675,7 @@ void check_for_calibration(char **packet)
     }
 
     if (strstr(*packet, STARTCAL1) != NULL){
+        stop_disconn_delay_timer();
         CAL_MODE = true;
         NUM_CAL_PTS = 1;
         // Make sure other processes are stopped and reset so calibration can occur
@@ -663,6 +684,7 @@ void check_for_calibration(char **packet)
         APP_ERROR_CHECK(err_code);
     }
     else if (strstr(*packet, STARTCAL2) != NULL){
+        stop_disconn_delay_timer();
         CAL_MODE = true;
         NUM_CAL_PTS = 2;
         // Make sure other processes are stopped and reset so calibration can occur
@@ -671,6 +693,7 @@ void check_for_calibration(char **packet)
         APP_ERROR_CHECK(err_code);
     }
     else if (strstr(*packet, STARTCAL3) != NULL) {
+        stop_disconn_delay_timer();
         CAL_MODE = true;
         NUM_CAL_PTS = 3;
         // Make sure other processes are stopped and reset so calibration can occur
@@ -692,7 +715,7 @@ void check_for_calibration(char **packet)
           perform_calibration(1);
           write_cal_values_to_flash();
           reset_calibration_state();
-          restart_pH_interval_timer();
+          disconnect_from_central();
         }
     }
     else if (strstr(*packet, PT2) != NULL) {
@@ -708,7 +731,7 @@ void check_for_calibration(char **packet)
           perform_calibration(2);
           write_cal_values_to_flash();
           reset_calibration_state();
-          restart_pH_interval_timer();
+          disconnect_from_central();
         }
     }
     else if (strstr(*packet, PT3) != NULL) {
@@ -724,7 +747,7 @@ void check_for_calibration(char **packet)
           perform_calibration(3);
           write_cal_values_to_flash();
           reset_calibration_state();
-          restart_pH_interval_timer();
+          disconnect_from_central();
         }    
     }
 }
@@ -1575,15 +1598,10 @@ void enable_pH_voltage_reading(void)
 //      saadc_sampling_event_init();
 //      saadc_sampling_event_enable();
 //    }
-    read_saadc_for_regular_protocol();
+    if (!CAL_MODE) 
+        read_saadc_for_regular_protocol();
 }
 
-void restart_pH_interval_timer(void)
-{
-      ret_code_t err_code;
-      err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(DATA_INTERVAL), NULL);
-      APP_ERROR_CHECK(err_code);
-}
 
 /* Function unitializes and disables SAADC sampling, restarts timer
  */
@@ -1629,6 +1647,19 @@ void single_shot_timer_handler()
      * * * * * * * * * * * * * * */
 }
 
+void disconn_delay_timer_handler()
+{
+    // disable timer
+    ret_code_t err_code;
+    err_code = app_timer_stop(m_timer_disconn_delay);
+    APP_ERROR_CHECK(err_code);
+
+    // Disconnect from central
+    err_code = sd_ble_gap_disconnect(m_conn_handle, 
+                                     BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+    APP_ERROR_CHECK(err_code);
+}
+
 
 /**@brief Function for initializing the timer module.
  */
@@ -1638,6 +1669,10 @@ void timers_init(void)
     err_code = app_timer_init();
     APP_ERROR_CHECK(err_code);
     err_code = app_timer_create(&m_timer_id,
+                                APP_TIMER_MODE_SINGLE_SHOT,
+                                single_shot_timer_handler);
+    APP_ERROR_CHECK(err_code);
+    err_code = app_timer_create(&m_timer_disconn_delay,
                                 APP_TIMER_MODE_SINGLE_SHOT,
                                 single_shot_timer_handler);
     APP_ERROR_CHECK(err_code);
@@ -1666,10 +1701,19 @@ void send_data_and_restart_timer()
                     APP_ERROR_CHECK(err_code);              
              }
           } while (err_code == NRF_ERROR_RESOURCES);
-          // Disconnect
-          err_code = sd_ble_gap_disconnect(m_conn_handle, 
-                                           BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-          APP_ERROR_CHECK(err_code);
+          
+          if (DISCONN_DELAY) {
+              // Delay before disconnecting from central
+              err_code = app_timer_start(m_timer_disconn_delay, 
+                                         APP_TIMER_TICKS(DISCONN_DELAY_MS), NULL);
+              APP_ERROR_CHECK(err_code);
+          }
+          else {
+              err_code = 
+                  sd_ble_gap_disconnect(m_conn_handle, 
+                                        BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+              APP_ERROR_CHECK(err_code);
+          }
     }
     // Add most recent data to buffer, then send all data in buffer
     else {
@@ -2002,10 +2046,18 @@ void send_next_packet_in_buffer()
      if (PACK_CTR == TOTAL_DATA_IN_BUFFERS) {
          reset_data_buffers();
          SEND_BUFFERED_DATA = false;
-       err_code = 
-            sd_ble_gap_disconnect(m_conn_handle, 
-                                  BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-       APP_ERROR_CHECK(err_code);
+         if (DISCONN_DELAY) {
+            // Delay before disconnecting from central
+            err_code = app_timer_start(m_timer_disconn_delay, 
+                                       APP_TIMER_TICKS(DISCONN_DELAY_MS), NULL);
+            APP_ERROR_CHECK(err_code);
+         }
+         else {
+             err_code = 
+                  sd_ble_gap_disconnect(m_conn_handle, 
+                                        BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+             APP_ERROR_CHECK(err_code);
+        }
       }
 }
 
