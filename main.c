@@ -117,7 +117,7 @@
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define DEVICE_NAME                     "Lura_Test_Dan"                                 /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "Lura_Test_Dan"                             /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
@@ -130,7 +130,7 @@
 #define MAX_CONN_INTERVAL               MSEC_TO_UNITS(80, UNIT_1_25_MS)             /**< Maximum acceptable connection interval, Connection interval uses 1.25 ms units. */
 #define SLAVE_LATENCY                   0                                           /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(5000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
-#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(10000)                       /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
+#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(10000)                      /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(30000)                      /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT    3                                           /**< Number of attempts before giving up the connection parameter negotiation. */
 
@@ -270,8 +270,9 @@ void check_for_buffer_done_signal(char **packet);
 void linreg                     (int num, double x[], double y[]);
 void perform_calibration        (uint8_t cal_pts);
 double calculate_pH_from_mV     (uint32_t ph_val);
+double calculate_celsius_from_mv(uint32_t mv);
 static void advertising_start   (bool erase_bonds);
-static void idle_state_handle    (void);
+static void idle_state_handle   (void);
 uint32_t saadc_result_to_mv     (uint32_t saadc_result);
 
 /* 
@@ -413,7 +414,64 @@ void check_for_buffer_done_signal(char **packet)
         APP_ERROR_CHECK(err_code);
     }
 }
- 
+
+/*
+ * Functions for translating from temperature sensor millivolt output 
+ * to real-world temperature values. The thermistor resistance should first
+ * be calculated from the temperature millivolt reading. Then, A simplified 
+ * version of the Steinhart and Hart equation can be used to calculate 
+ * Kelvins. Data is sent in Celsius for ease of debugging (data sheet values
+ * are listed in Celsius), and the mobile application may convert to Fahrenheit
+ */
+
+// Helper function to convert millivolts to thermistor resistance
+double mv_to_therm_resistance(uint32_t mv)
+{
+    double therm_res = 0;
+    double Vtemp     = 0;
+    double R1        = 10000.0;
+    double Vin       = 1800;
+
+    Vtemp = (double) mv;
+    therm_res = (Vtemp * R1) / (Vin - Vtemp);
+
+    return therm_res;
+}
+
+// Helper function to convert thermistor resistance to Kelvins
+double therm_resistance_to_kelvins(double therm_res)
+{
+    double kelvins_constant = 273.15;
+    double ref_temp         = 25.0 + kelvins_constant;
+    double ref_resistance   = 10000.0;
+    double beta_constant    = 3380.0;
+    double real_kelvins     = 0;
+
+    real_kelvins = (beta_constant * ref_temp) / 
+                      (beta_constant + (ref_temp * log(therm_res/ref_resistance)));
+
+    return real_kelvins;
+}
+
+// Helper function to convert Kelvins to Celsius
+double kelvins_to_celsius(double kelvins)
+{
+    double kelvins_constant = 273.15;
+    return kelvins - kelvins_constant;
+}
+
+// Function to fully convert temperature millivolt output to degrees celsius
+double calculate_celsius_from_mv(uint32_t mv)
+{
+    double therm_res = 0;
+    double kelvins   = 0;
+    double celsius   = 0;
+    therm_res = mv_to_therm_resistance(mv);
+    kelvins   = therm_resistance_to_kelvins(therm_res);
+    celsius   = kelvins_to_celsius(kelvins);
+
+    return celsius;
+}
 
 
 /**@brief Function for assert macro callback.
@@ -671,6 +729,8 @@ void check_for_calibration(char **packet)
     uint32_t err_code;
 
     if (strstr(*packet, PWROFF) != NULL){
+        NRF_LOG_INFO("received pwroff\n");
+        disconnect_from_central();
         nrfx_gpiote_out_clear(CHIP_POWER_PIN);
     }
 
@@ -2073,6 +2133,12 @@ int main(void)
 
     log_init();
     power_management_init();
+
+    uint32_t test_mv = 891;
+    double test_celsius = 0;
+    test_celsius = calculate_celsius_from_mv(test_mv);
+    NRF_LOG_INFO("Expected celsius: 25.5, calculated: "NRF_LOG_FLOAT_MARKER" \n", 
+                      NRF_LOG_FLOAT(test_celsius));
 
     // Initialize fds and check for calibration values
     fds_init_helper();
