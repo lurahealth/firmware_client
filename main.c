@@ -2134,12 +2134,6 @@ int main(void)
     log_init();
     power_management_init();
 
-    uint32_t test_mv = 891;
-    double test_celsius = 0;
-    test_celsius = calculate_celsius_from_mv(test_mv);
-    NRF_LOG_INFO("Expected celsius: 25.5, calculated: "NRF_LOG_FLOAT_MARKER" \n", 
-                      NRF_LOG_FLOAT(test_celsius));
-
     // Initialize fds and check for calibration values
     fds_init_helper();
     check_calibration_state();
