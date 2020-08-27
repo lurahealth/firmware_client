@@ -1974,12 +1974,12 @@ float fds_read(uint16_t FILE_ID, uint16_t REC_KEY)
 {
     fds_flash_record_t  flash_record;
     fds_record_desc_t  record_desc;
-    fds_find_token_t    ftok ={0};//Important, make sure you zero init the ftok token
+    fds_find_token_t    ftok ={0};   //Important, make sure to zero init the ftok token
     float *p_data;
     float data;
     uint32_t err_code;
     
-    NRF_LOG_INFO("Start searching... \r\n");
+    NRF_LOG_INFO("Start flash search... \r\n");
     // Loop until all records with the given key and file ID have been found.
     while (fds_record_find(FILE_ID, REC_KEY, &record_desc, &ftok) == FDS_SUCCESS)
     {
@@ -1997,7 +1997,6 @@ float fds_read(uint16_t FILE_ID, uint16_t REC_KEY)
                 NRF_LOG_INFO("Data read: " NRF_LOG_FLOAT_MARKER "\n", NRF_LOG_FLOAT(data));
         }
         NRF_LOG_INFO("\r\n");
-        // Access the record through the flash_record structure.
         // Close the record when done.
         err_code = fds_record_close(&record_desc);
         if (err_code != FDS_SUCCESS)
