@@ -597,13 +597,9 @@ void read_saadc_for_calibration(void)
     int NUM_SAMPLES = 50;
     nrf_saadc_value_t temp_val = 0;
     ret_code_t err_code;
-//    disable_pH_voltage_reading();
     AVG_PH_VAL = 0;
     READ_CAL_DATA = true;
     PH_IS_READ = false;
-    // Make sure isfet circuit is enabled for saadc readings
-//    enable_isfet_circuit();
-//    nrf_delay_ms(10);
     // Take saadc readings for pH, temp and battery
     enable_pH_voltage_reading();
     for (int i = 0; i < NUM_SAMPLES; i++) {
@@ -1505,73 +1501,6 @@ uint32_t saadc_result_to_mv(uint32_t saadc_result)
     return (uint32_t)adc_res_in_mv;
 }
 
-/**
- * Function is called when SAADC reading event is done. First done event
- * reads pH input, stores in global variable. Second reading stores
- * pH data, combines pH and temp data into a comma-seperated string,
- * then transmits via BLE.
- *
- * BUG: p_buffer[0] is always '0' when reading pH at high frequency.
- *      Workaround is to average values besides 1, divide by 
- *      samples_in_buffer -1 .
- */
-void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
-{
-    if (p_event->type == NRF_DRV_SAADC_EVT_DONE) 
-    {
-        ret_code_t err_code;
-        uint32_t   avg_saadc_reading = 0;
-        
-        // Sum and average SAADC values
-        for (int i = 1; i < SAMPLES_IN_BUFFER; i++)
-        {
-            if (p_event->data.done.p_buffer[i] < 0) {
-                avg_saadc_reading += 0;
-            } 
-            else {
-                avg_saadc_reading += p_event->data.done.p_buffer[i];
-            }
-        }
-
-        avg_saadc_reading = avg_saadc_reading/(SAMPLES_IN_BUFFER - 1); 
-        // If ph has not been read, read it then restart SAADC to read temp
-        if (!PH_IS_READ) {
-            AVG_PH_VAL = saadc_result_to_mv(avg_saadc_reading);
-            PH_IS_READ = true;
-            // Uninit saadc peripheral, restart saadc, enable sampling event
-            NRF_LOG_INFO("read pH val, restarting: %d", AVG_PH_VAL);
-            //NRF_LOG_FLUSH();
-            restart_saadc();
-        } 
-        // If pH has been read but not battery, read battery then restart
-        else if (!(PH_IS_READ && BATTERY_IS_READ)) {
-            AVG_BATT_VAL = saadc_result_to_mv(avg_saadc_reading);
-            NRF_LOG_INFO("read batt val, restarting: %d", AVG_BATT_VAL);
-            //NRF_LOG_FLUSH();
-            BATTERY_IS_READ = true;
-            restart_saadc();
-        }
-        // Once temp, battery and ph have been read, create and send data in packet
-        // or adjust the calibration points as necessary
-        else {
-            AVG_TEMP_VAL = saadc_result_to_mv(avg_saadc_reading);
-            NRF_LOG_INFO("read temp val: %d\n", AVG_TEMP_VAL);
-            NRF_LOG_FLUSH();
-
-            //NRF_LOG_ERROR( "MVAL: " NRF_LOG_FLOAT_MARKER "\n", NRF_LOG_FLOAT(MVAL_CALIBRATION));
-            //NRF_LOG_ERROR( "BVAL: " NRF_LOG_FLOAT_MARKER "\n", NRF_LOG_FLOAT(BVAL_CALIBRATION));
-          
-            // reset global control boolean
-            PH_IS_READ = false;
-            BATTERY_IS_READ = false;
-
-            // Disable all resources, turn off adc/etc, advertise
-            disable_pH_voltage_reading();
-            advertising_start(false);
-        }
-    }
-}
-
 // Read saadc values for temperature, battery level, and pH to store for calibration
 void read_saadc_for_regular_protocol(void) 
 {
@@ -1598,9 +1527,6 @@ void read_saadc_for_regular_protocol(void)
     else if (!(PH_IS_READ && BATTERY_IS_READ)){
       AVG_BATT_VAL = AVG_MV_VAL;
       NRF_LOG_INFO("read batt val, restarting: %d", AVG_BATT_VAL);
-
-      
-
       NRF_LOG_FLUSH();
       BATTERY_IS_READ = true;
       restart_saadc();
@@ -1652,25 +1578,19 @@ void saadc_init(void)
     nrf_saadc_input_t ANALOG_INPUT;
     // Change pin depending on global control boolean
     if (!PH_IS_READ) {
-        //NRF_LOG_INFO("Setting saadc input to AIN2\n");
         ANALOG_INPUT = NRF_SAADC_INPUT_AIN2;
     }
     else if (!(PH_IS_READ && BATTERY_IS_READ)) {
-        //NRF_LOG_INFO("Setting saadc input to AIN3\n");
         ANALOG_INPUT = NRF_SAADC_INPUT_AIN3;
     }
     else {
-        //NRF_LOG_INFO("Setting saadc input to AIN1\n");
         ANALOG_INPUT = NRF_SAADC_INPUT_AIN1;        
     }
 
     nrf_saadc_channel_config_t channel_config =
             NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(ANALOG_INPUT);
     
-//    if (!CAL_MODE)
-//      init_saadc_for_buffer_conversion(channel_config);
-//    else 
-      init_saadc_for_blocking_sample_conversion(channel_config);
+    init_saadc_for_blocking_sample_conversion(channel_config);
 }
 
 
@@ -1679,10 +1599,6 @@ void saadc_init(void)
 void enable_pH_voltage_reading(void)
 {
     saadc_init();
-//    if (!CAL_MODE) {
-//      saadc_sampling_event_init();
-//      saadc_sampling_event_enable();
-//    }
     if (!CAL_MODE) 
         read_saadc_for_regular_protocol();
 }
@@ -1694,15 +1610,9 @@ void disable_pH_voltage_reading(void)
 {
     NRF_LOG_INFO("\n*** Disabling pH voltage reading ***\n\n");
     NRF_LOG_FLUSH();
-    ret_code_t err_code;
-//    nrf_drv_timer_disable(&m_timer);
-//    err_code = nrfx_ppi_channel_free(m_ppi_channel);
-//    APP_ERROR_CHECK(err_code);
     nrfx_saadc_uninit();
     NVIC_ClearPendingIRQ(SAADC_IRQn);
-    while(nrfx_saadc_is_busy()) {
-        // make sure SAADC is not busy
-    }
+    while(nrfx_saadc_is_busy()) {}
 
     // *** DISABLE BIASING CIRCUITRY ***
     disable_isfet_circuit();
@@ -1728,7 +1638,7 @@ void single_shot_timer_handler()
     enable_pH_voltage_reading();
 
     /*
-     *  UNCOMMENT TO SEND DATA
+     *  COMMENT TO NOT SEND DATA
      * * * * * * * * * * * * * * */
 }
 
@@ -1902,9 +1812,6 @@ void linreg(int num, double x[], double y[])
 
 void my_fds_evt_handler(fds_evt_t const * const p_fds_evt)
 {
-    //NRF_LOG_INFO("INSIDE FDS EVENT HANDLER");
-    //NRF_LOG_INFO("    FDS ID: %d, FDS RESULT: %d \n", p_fds_evt->id, p_fds_evt->result);
-    //NRF_LOG_FLUSH();
     switch (p_fds_evt->id)
     {
         case FDS_EVT_INIT:
