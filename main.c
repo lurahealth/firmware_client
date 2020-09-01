@@ -1548,18 +1548,6 @@ void saadc_blocking_callback(nrf_drv_saadc_evt_t const * p_event)
 }
 
 
-void init_saadc_for_buffer_conversion(nrf_saadc_channel_config_t channel_config)
-{
-    ret_code_t err_code;
-    err_code = nrf_drv_saadc_init(NULL, saadc_callback);
-    APP_ERROR_CHECK(err_code);
-
-    err_code = nrf_drv_saadc_channel_init(0, &channel_config);
-    APP_ERROR_CHECK(err_code);
-
-    err_code = nrf_drv_saadc_buffer_convert(m_buffer_pool[0], SAMPLES_IN_BUFFER);
-    APP_ERROR_CHECK(err_code);
-}
 
 void init_saadc_for_blocking_sample_conversion(nrf_saadc_channel_config_t channel_config)
 {
