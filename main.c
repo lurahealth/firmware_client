@@ -117,20 +117,20 @@
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define DEVICE_NAME                     "Lura_Test_Dan"                   /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "Lura_Test_Dan"                             /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 
-#define APP_ADV_INTERVAL                325                                         /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
+#define APP_ADV_INTERVAL                400                                         /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
 
-#define APP_ADV_DURATION                300                                         /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
+#define APP_ADV_DURATION                1000                                        /**< The advertising duration in units of 10 milliseconds. */
 
-#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(40, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(80, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (200 ms), Connection interval uses 1.25 ms units. */
+#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(40, UNIT_1_25_MS)             /**< Minimum acceptable connection interval, Connection interval uses 1.25 ms units. */
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(80, UNIT_1_25_MS)             /**< Maximum acceptable connection interval, Connection interval uses 1.25 ms units. */
 #define SLAVE_LATENCY                   0                                           /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(5000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
-#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(10000)                       /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
+#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(10000)                      /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(30000)                      /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT    3                                           /**< Number of attempts before giving up the connection parameter negotiation. */
 
@@ -177,6 +177,12 @@ NRF_BLE_GATT_DEF(m_gatt);                                                       
 NRF_BLE_QWR_DEF(m_qwr);                                                             /**< Context for the Queued Write module.*/
 BLE_ADVERTISING_DEF(m_advertising);                                                 /**< Advertising module instance. */
 APP_TIMER_DEF(m_timer_id);
+
+// Timer and control flag to enable delay before disconnecting
+APP_TIMER_DEF(m_timer_disconn_delay);
+bool   DISCONN_DELAY    = true;
+#define DISCONN_DELAY_MS   15000 
+
 
 static uint16_t   m_conn_handle          = BLE_CONN_HANDLE_INVALID;                 /**< Handle of the current connection. */
 static uint16_t   m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - 3;            /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
@@ -238,9 +244,6 @@ uint16_t   total_size = 20;
 #define CAL_DONE_FILE_ID  0x4440
 #define CAL_DONE_REC_KEY  0x4441
 
-
-
-static const nrf_drv_timer_t   m_timer = NRF_DRV_TIMER_INSTANCE(1);
 static       nrf_saadc_value_t m_buffer_pool[1][SAMPLES_IN_BUFFER];
 static       nrf_ppi_channel_t m_ppi_channel;
 
@@ -259,14 +262,14 @@ void disable_isfet_circuit      (void);
 void turn_chip_power_on         (void);
 void turn_chip_power_off         (void);
 void restart_saadc              (void);
-void restart_pH_interval_timer  (void);
 void write_cal_values_to_flash   (void);
 void check_for_buffer_done_signal(char **packet);
 void linreg                     (int num, double x[], double y[]);
 void perform_calibration        (uint8_t cal_pts);
 double calculate_pH_from_mV     (uint32_t ph_val);
+double calculate_celsius_from_mv(uint32_t mv);
 static void advertising_start   (bool erase_bonds);
-static void idle_state_handle    (void);
+static void idle_state_handle   (void);
 uint32_t saadc_result_to_mv     (uint32_t saadc_result);
 
 /* 
@@ -408,7 +411,64 @@ void check_for_buffer_done_signal(char **packet)
         APP_ERROR_CHECK(err_code);
     }
 }
- 
+
+/*
+ * Functions for translating from temperature sensor millivolt output 
+ * to real-world temperature values. The thermistor resistance should first
+ * be calculated from the temperature millivolt reading. Then, A simplified 
+ * version of the Steinhart and Hart equation can be used to calculate 
+ * Kelvins. Data is sent in Celsius for ease of debugging (data sheet values
+ * are listed in Celsius), and the mobile application may convert to Fahrenheit
+ */
+
+// Helper function to convert millivolts to thermistor resistance
+double mv_to_therm_resistance(uint32_t mv)
+{
+    double therm_res = 0;
+    double Vtemp     = 0;
+    double R1        = 10000.0;
+    double Vin       = 1800;
+
+    Vtemp = (double) mv;
+    therm_res = (Vtemp * R1) / (Vin - Vtemp);
+
+    return therm_res;
+}
+
+// Helper function to convert thermistor resistance to Kelvins
+double therm_resistance_to_kelvins(double therm_res)
+{
+    double kelvins_constant = 273.15;
+    double ref_temp         = 25.0 + kelvins_constant;
+    double ref_resistance   = 10000.0;
+    double beta_constant    = 3380.0;
+    double real_kelvins     = 0;
+
+    real_kelvins = (beta_constant * ref_temp) / 
+                      (beta_constant + (ref_temp * log(therm_res/ref_resistance)));
+
+    return real_kelvins;
+}
+
+// Helper function to convert Kelvins to Celsius
+double kelvins_to_celsius(double kelvins)
+{
+    double kelvins_constant = 273.15;
+    return kelvins - kelvins_constant;
+}
+
+// Function to fully convert temperature millivolt output to degrees celsius
+double calculate_celsius_from_mv(uint32_t mv)
+{
+    double therm_res = 0;
+    double kelvins   = 0;
+    double celsius   = 0;
+    therm_res = mv_to_therm_resistance(mv);
+    kelvins   = therm_resistance_to_kelvins(therm_res);
+    celsius   = kelvins_to_celsius(kelvins);
+
+    return celsius;
+}
 
 
 /**@brief Function for assert macro callback.
@@ -534,13 +594,9 @@ void read_saadc_for_calibration(void)
     int NUM_SAMPLES = 50;
     nrf_saadc_value_t temp_val = 0;
     ret_code_t err_code;
-    disable_pH_voltage_reading();
     AVG_PH_VAL = 0;
     READ_CAL_DATA = true;
     PH_IS_READ = false;
-    // Make sure isfet circuit is enabled for saadc readings
-    enable_isfet_circuit();
-    nrf_delay_ms(10);
     // Take saadc readings for pH, temp and battery
     enable_pH_voltage_reading();
     for (int i = 0; i < NUM_SAMPLES; i++) {
@@ -621,111 +677,88 @@ void perform_calibration(uint8_t cal_pts)
   }
 }
 
+void stop_disconn_delay_timer()
+{
+    ret_code_t err_code;
+    err_code = app_timer_stop(m_timer_disconn_delay);
+    APP_ERROR_CHECK(err_code);
+}
+
+void disconnect_from_central()
+{
+    uint32_t err_code;
+    err_code = sd_ble_gap_disconnect(m_conn_handle, 
+                                     BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+    APP_ERROR_CHECK(err_code);
+}
+
 /*
  * Checks packet contents to appropriately perform calibration
  */
 void check_for_calibration(char **packet)
 {
     // Possible Strings to be received by pH device
-    char *STARTCAL1 = "STARTCAL1";
-    char *STARTCAL2 = "STARTCAL2";
-    char *STARTCAL3 = "STARTCAL3";
+    char *STARTCAL  = "STARTCAL";
     char *PWROFF    = "PWROFF";
-    char *PT1       = "PT1";
-    char *PT2       = "PT2";
-    char *PT3       = "PT3";
-
+    char *PT        = "PT";
     // Possible strings to send to mobile application
     char *CALBEGIN = "CALBEGIN";
-    char *PT1CONF  = "PT1CONF";
-    char *PT2CONF  = "PT2CONF";
-    char *PT3CONF  = "PT3CONF";
-
+    char PT_CONFS[3][8] = {"PT1CONF", "PT2CONF", "PT3CONF"};
     // Variables to hold sizes of strings for ble_nus_send function
     uint16_t SIZE_BEGIN = 9;
     uint16_t SIZE_CONF  = 8;
-
     // Used for parsing out pH value from PT1_X.Y (etc) packets
     char pH_val_substring[4];
 
     uint32_t err_code;
 
     if (strstr(*packet, PWROFF) != NULL){
+        NRF_LOG_INFO("received pwroff\n");
+        disconnect_from_central();
         nrfx_gpiote_out_clear(CHIP_POWER_PIN);
     }
 
-    if (strstr(*packet, STARTCAL1) != NULL){
+    if (strstr(*packet, STARTCAL) != NULL) {
+        char cal_pts_str[1];
         CAL_MODE = true;
-        NUM_CAL_PTS = 1;
-        // Make sure other processes are stopped and reset so calibration can occur
+        stop_disconn_delay_timer();
         disable_pH_voltage_reading();
-        err_code = ble_nus_data_send(&m_nus, CALBEGIN, &SIZE_BEGIN, m_conn_handle);
-        APP_ERROR_CHECK(err_code);
-    }
-    else if (strstr(*packet, STARTCAL2) != NULL){
-        CAL_MODE = true;
-        NUM_CAL_PTS = 2;
-        // Make sure other processes are stopped and reset so calibration can occur
-        disable_pH_voltage_reading();
-        err_code = ble_nus_data_send(&m_nus, CALBEGIN, &SIZE_BEGIN, m_conn_handle);
-        APP_ERROR_CHECK(err_code);
-    }
-    else if (strstr(*packet, STARTCAL3) != NULL) {
-        CAL_MODE = true;
-        NUM_CAL_PTS = 3;
-        // Make sure other processes are stopped and reset so calibration can occur
-        disable_pH_voltage_reading();
+        // Parse integer from STARTCALX packet, where X is 1, 2 or 3
+        substring(*packet, cal_pts_str, 9, 1);
+        NUM_CAL_PTS = atoi(cal_pts_str);
+        NRF_LOG_INFO("NUM_CAL_PTS: %d\n", NUM_CAL_PTS);
         err_code = ble_nus_data_send(&m_nus, CALBEGIN, &SIZE_BEGIN, m_conn_handle);
         APP_ERROR_CHECK(err_code);
     }
 
-    if (strstr(*packet, PT1) != NULL) {
-        // Parse out the pH value from the packet, will always be format "X.Y"
+    if (strstr(*packet, PT) != NULL) {
+        char cal_pt_str[1];
+        int cal_pt = 0;
+        // Parse out calibration point from packet
+        substring(*packet, cal_pt_str, 3, 1);
+        NRF_LOG_INFO("Parsed curr cal_pt: %d\n", atoi(cal_pt_str));
+        cal_pt = atoi(cal_pt_str);
+        // Parse out pH value from packet
         substring(*packet, pH_val_substring, 5, 3);
-        PT1_PH_VAL = atof(pH_val_substring);   
-
+        // Assign pH value to appropriate variable
+        if (cal_pt == 1)
+            PT1_PH_VAL = atof(pH_val_substring); 
+        else if (cal_pt == 2)
+            PT2_PH_VAL = atof(pH_val_substring); 
+        else if (cal_pt == 3)
+            PT3_PH_VAL = atof(pH_val_substring); 
+        // Read calibration data and send confirmation packet
         read_saadc_for_calibration();
-        err_code = ble_nus_data_send(&m_nus, PT1CONF, &SIZE_CONF, m_conn_handle);
+        err_code = ble_nus_data_send(&m_nus, PT_CONFS[cal_pt - 1], 
+                                     &SIZE_CONF, m_conn_handle);
         APP_ERROR_CHECK(err_code);
-        // Restart normal data transmision once calibration is complete
-        if (NUM_CAL_PTS == 1) {
-          perform_calibration(1);
+        // Restart normal data transmission if calibration is complete
+        if (NUM_CAL_PTS == cal_pt) {
+          perform_calibration(cal_pt);
           write_cal_values_to_flash();
           reset_calibration_state();
-          restart_pH_interval_timer();
+          disconnect_from_central();
         }
-    }
-    else if (strstr(*packet, PT2) != NULL) {
-        // Parse out the pH value from the packet, will always be format "X.Y"
-        substring(*packet, pH_val_substring, 5, 3);
-        PT2_PH_VAL = atof(pH_val_substring);
-        
-        read_saadc_for_calibration();
-        err_code = ble_nus_data_send(&m_nus, PT2CONF, &SIZE_CONF, m_conn_handle);
-        APP_ERROR_CHECK(err_code);
-        // Restart normal data transmision once calibration is complete
-        if (NUM_CAL_PTS == 2) {
-          perform_calibration(2);
-          write_cal_values_to_flash();
-          reset_calibration_state();
-          restart_pH_interval_timer();
-        }
-    }
-    else if (strstr(*packet, PT3) != NULL) {
-        // Parse out the pH value from the packet, will always be format "X.Y"
-        substring(*packet, pH_val_substring, 5, 3);
-        PT3_PH_VAL = atof(pH_val_substring); 
-       
-        read_saadc_for_calibration();
-        err_code = ble_nus_data_send(&m_nus, PT3CONF, &SIZE_CONF, m_conn_handle);
-        APP_ERROR_CHECK(err_code);
-        // Restart normal data transmision once calibration is complete
-        if (NUM_CAL_PTS == 3) {
-          perform_calibration(3);
-          write_cal_values_to_flash();
-          reset_calibration_state();
-          restart_pH_interval_timer();
-        }    
     }
 }
 
@@ -779,7 +812,6 @@ void nus_data_handler(ble_nus_evt_t * p_evt)
     }
 
 }
-/**@snippet [Handling the data received over BLE] */
 
 
 /**@brief Function for initializing services that will be used by the application.
@@ -954,6 +986,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
             CONNECTION_MADE = false;
             NRF_LOG_INFO("DISCONNECTED\n");
+            HVN_COUNTER = 0;
             init_and_start_app_timer();
 
             break;
@@ -1228,52 +1261,6 @@ void disable_isfet_circuit(void)
 
 }
 
-void timer_handler(nrf_timer_event_t event_type, void * p_context)
-{
-    // To Add Later
-}
-
-
-void saadc_sampling_event_init(void)
-{
-    ret_code_t err_code;
-
-    nrf_drv_timer_config_t timer_cfg = NRF_DRV_TIMER_DEFAULT_CONFIG;
-    timer_cfg.bit_width = NRF_TIMER_BIT_WIDTH_32;
-    err_code = nrf_drv_timer_init(&m_timer, &timer_cfg, timer_handler);
-    APP_ERROR_CHECK(err_code);
-
-    /* setup m_timer for compare event every 15us */
-    uint32_t ticks = nrf_drv_timer_us_to_ticks(&m_timer, 35);
-    nrf_drv_timer_extended_compare(&m_timer,
-                                   NRF_TIMER_CC_CHANNEL0,
-                                   ticks,
-                                   NRF_TIMER_SHORT_COMPARE0_CLEAR_MASK,
-                                   false);
-    nrf_drv_timer_enable(&m_timer);
-
-    uint32_t timer_compare_event_addr = 
-                nrf_drv_timer_compare_event_address_get(&m_timer,
-                                                        NRF_TIMER_CC_CHANNEL0);
-    uint32_t saadc_sample_task_addr   = nrf_drv_saadc_sample_task_get();
-
-    /* setup ppi channel so that timer compare event triggers task in SAADC */
-    err_code = nrf_drv_ppi_channel_alloc(&m_ppi_channel);
-    APP_ERROR_CHECK(err_code);
-
-    err_code = nrf_drv_ppi_channel_assign(m_ppi_channel,
-                                          timer_compare_event_addr,
-                                          saadc_sample_task_addr);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-void saadc_sampling_event_enable(void)
-{
-    ret_code_t err_code = nrf_drv_ppi_channel_enable(m_ppi_channel);
-    APP_ERROR_CHECK(err_code);
-}
-
 
 void restart_saadc(void)
 {
@@ -1296,25 +1283,14 @@ double calculate_pH_from_mV(uint32_t ph_val)
     return ((double)ph_val * MVAL_CALIBRATION) + BVAL_CALIBRATION;
 }
 
-// Pack integer values into byte array to send via bluetooth
-void create_bluetooth_packet(uint32_t ph_val,   uint32_t batt_val,        
-                             uint32_t temp_val, float ph_val_cal,
-                             uint8_t* total_packet)
+// Packs calibrated pH value into total_packet[0-3], rounded to nearest 0.25 pH
+void pack_calibrated_ph_val(uint32_t ph_val, float ph_val_cal, 
+                                             uint8_t* total_packet)
 {
-    /*
-      {0,0,0,0,44,    pH value arr[0-3], comma arr[4]
-       0,0,0,0,44,    temperature arr[5-8], comma arr[9]
-       0,0,0,0,44,    battery value arr[10-13], commar arr[14]
-       0 0 0 0,10};   raw pH value arr[15-18], EOL arr[19]
-    */
-
-    uint32_t temp = 0;    // hold intermediate divisions of variables
     uint32_t ASCII_DIG_BASE = 48;
-
     // If calibration has not been performed, store 0000 in real pH field [0-3],
     // and store the raw SAADC data in the last field [15-18]
     if (!CAL_PERFORMED) {
-      temp = ph_val;
       for(int i = 3; i >= 0; i--){
         total_packet[i] = 0 + ASCII_DIG_BASE;
       }
@@ -1354,20 +1330,29 @@ void create_bluetooth_packet(uint32_t ph_val,   uint32_t batt_val,
         total_packet[3] = (uint8_t) (((uint8_t)pH_decimal_vals / 10) + ASCII_DIG_BASE);
       }
     }
-    // Pack temp_val into appropriate location
+}
+
+// Packs temperature value into total_packet[5-8], as degrees Celsius
+void pack_temperature_val(uint32_t temp_val, uint8_t* total_packet)
+{
+    uint32_t ASCII_DIG_BASE = 48;
+    double real_temp = calculate_celsius_from_mv(temp_val);
+    NRF_LOG_INFO("temp celsius: " NRF_LOG_FLOAT_MARKER " \n", NRF_LOG_FLOAT(real_temp));
+    double temp_decimal_vals = (real_temp - floor(real_temp)) * 100;
+    total_packet[5] = (uint8_t) ((uint8_t)floor(real_temp / 10) + ASCII_DIG_BASE);
+    total_packet[6] = (uint8_t) ((uint8_t)floor((uint8_t)real_temp % 10) + ASCII_DIG_BASE);
+    total_packet[7] = 46;
+    total_packet[8] = (uint8_t) (((uint8_t)temp_decimal_vals / 10) + ASCII_DIG_BASE);
+
+}
+
+// Packs battery value into total_packet[10-13], as millivolts
+void pack_battery_val(uint32_t batt_val, uint8_t* total_packet)
+{
+    uint32_t ASCII_DIG_BASE = 48;
+    uint32_t temp = 0;            // hold intermediate divisions of variables
     // Packing protocol for number abcd: 
-    //  [... 0, 0, 0, d] --> [... 0, 0, c, d] --> [... 0, b, c, d] --> [... a, b, c, d]
-    temp = temp_val;
-    for(int i = 8; i >= 5; i--){
-        if (i == 8) total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
-        else {
-            temp = temp / 10;
-            total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
-        }
-    }
-    // Pack batt_val into appropriate location
-    // Packing protocol for number abcd: 
-    //  [... 0, 0, 0, d] --> [... 0, 0, c, d] --> [... 0, b, c, d] --> [... a, b, c, d]
+    //  [... 0, 0, 0, d] --> [... 0, 0, c, d] --> ... --> [... a, b, c, d]
     temp = batt_val;
     for(int i = 13; i >= 10; i--){
         if (i == 13) total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
@@ -1376,9 +1361,15 @@ void create_bluetooth_packet(uint32_t ph_val,   uint32_t batt_val,
             total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
         }
     }
-    // Pack batt_val into appropriate location
+}
+
+// Packs uncalibrated pH value into total_packet[15-18], as millivolts
+void pack_uncalibrated_ph_val(uint32_t ph_val, uint8_t* total_packet)
+{
+    uint32_t ASCII_DIG_BASE = 48;
+    uint32_t temp = 0;            // hold intermediate divisions of variables
     // Packing protocol for number abcd: 
-    //  [... 0, 0, 0, d] --> [... 0, 0, c, d] --> [... 0, b, c, d] --> [... a, b, c, d]
+    //  [... 0, 0, 0, d] --> [... 0, 0, c, d] --> ... --> [... a, b, c, d]
     temp = ph_val;
     for(int i = 18; i >= 15; i--){
         if (i == 18) total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
@@ -1387,6 +1378,24 @@ void create_bluetooth_packet(uint32_t ph_val,   uint32_t batt_val,
             total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
         }
     }
+}
+
+// Pack values into byte array to send via bluetooth
+void create_bluetooth_packet(uint32_t ph_val,   uint32_t batt_val,        
+                             uint32_t temp_val, float ph_val_cal,
+                             uint8_t* total_packet)
+{
+    /*
+        {0,0,0,0,44,    calibrated pH value arr[0-3], comma arr[4]
+         0,0,0,0,44,    temperature arr[5-8], comma arr[9]
+         0,0,0,0,44,    battery value arr[10-13], commar arr[14]
+         0 0 0 0,10};   raw pH value arr[15-18], EOL arr[19]
+    */
+      
+    pack_calibrated_ph_val(ph_val, ph_val_cal, total_packet);
+    pack_temperature_val(temp_val, total_packet);
+    pack_battery_val(batt_val, total_packet);
+    pack_uncalibrated_ph_val(ph_val, total_packet);   
 }
 
 uint32_t saadc_result_to_mv(uint32_t saadc_result)
@@ -1399,77 +1408,10 @@ uint32_t saadc_result_to_mv(uint32_t saadc_result)
     return (uint32_t)adc_res_in_mv;
 }
 
-/**
- * Function is called when SAADC reading event is done. First done event
- * reads pH input, stores in global variable. Second reading stores
- * pH data, combines pH and temp data into a comma-seperated string,
- * then transmits via BLE.
- *
- * BUG: p_buffer[0] is always '0' when reading pH at high frequency.
- *      Workaround is to average values besides 1, divide by 
- *      samples_in_buffer -1 .
- */
-void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
-{
-    if (p_event->type == NRF_DRV_SAADC_EVT_DONE) 
-    {
-        ret_code_t err_code;
-        uint32_t   avg_saadc_reading = 0;
-        
-        // Sum and average SAADC values
-        for (int i = 1; i < SAMPLES_IN_BUFFER; i++)
-        {
-            if (p_event->data.done.p_buffer[i] < 0) {
-                avg_saadc_reading += 0;
-            } 
-            else {
-                avg_saadc_reading += p_event->data.done.p_buffer[i];
-            }
-        }
-
-        avg_saadc_reading = avg_saadc_reading/(SAMPLES_IN_BUFFER - 1); 
-        // If ph has not been read, read it then restart SAADC to read temp
-        if (!PH_IS_READ) {
-            AVG_PH_VAL = saadc_result_to_mv(avg_saadc_reading);
-            PH_IS_READ = true;
-            // Uninit saadc peripheral, restart saadc, enable sampling event
-            NRF_LOG_INFO("read pH val, restarting: %d", AVG_PH_VAL);
-            //NRF_LOG_FLUSH();
-            restart_saadc();
-        } 
-        // If pH has been read but not battery, read battery then restart
-        else if (!(PH_IS_READ && BATTERY_IS_READ)) {
-            AVG_BATT_VAL = saadc_result_to_mv(avg_saadc_reading);
-            NRF_LOG_INFO("read batt val, restarting: %d", AVG_BATT_VAL);
-            //NRF_LOG_FLUSH();
-            BATTERY_IS_READ = true;
-            restart_saadc();
-        }
-        // Once temp, battery and ph have been read, create and send data in packet
-        // or adjust the calibration points as necessary
-        else {
-            AVG_TEMP_VAL = saadc_result_to_mv(avg_saadc_reading);
-            NRF_LOG_INFO("read temp val: %d\n", AVG_TEMP_VAL);
-            NRF_LOG_FLUSH();
-
-            //NRF_LOG_ERROR( "MVAL: " NRF_LOG_FLOAT_MARKER "\n", NRF_LOG_FLOAT(MVAL_CALIBRATION));
-            //NRF_LOG_ERROR( "BVAL: " NRF_LOG_FLOAT_MARKER "\n", NRF_LOG_FLOAT(BVAL_CALIBRATION));
-          
-            // reset global control boolean
-            PH_IS_READ = false;
-            BATTERY_IS_READ = false;
-
-            // Disable all resources, turn off adc/etc, advertise
-            disable_pH_voltage_reading();
-            advertising_start(false);
-        }
-    }
-}
-
 // Read saadc values for temperature, battery level, and pH to store for calibration
 void read_saadc_for_regular_protocol(void) 
 {
-    int NUM_SAMPLES = 100;
+    int NUM_SAMPLES = 150;
     nrf_saadc_value_t temp_val = 0;
     ret_code_t err_code;
     uint32_t AVG_MV_VAL = 0;
@@ -1499,7 +1441,6 @@ void read_saadc_for_regular_protocol(void)
     else {
        AVG_TEMP_VAL = AVG_MV_VAL;
        NRF_LOG_INFO("read temp val, restarting: %d", AVG_TEMP_VAL);
-       NRF_LOG_FLUSH();
        PH_IS_READ = false;
        BATTERY_IS_READ = false;
        disable_pH_voltage_reading();
@@ -1514,18 +1455,6 @@ void saadc_blocking_callback(nrf_drv_saadc_evt_t const * p_event)
 }
 
 
-void init_saadc_for_buffer_conversion(nrf_saadc_channel_config_t channel_config)
-{
-    ret_code_t err_code;
-    err_code = nrf_drv_saadc_init(NULL, saadc_callback);
-    APP_ERROR_CHECK(err_code);
-
-    err_code = nrf_drv_saadc_channel_init(0, &channel_config);
-    APP_ERROR_CHECK(err_code);
-
-    err_code = nrf_drv_saadc_buffer_convert(m_buffer_pool[0], SAMPLES_IN_BUFFER);
-    APP_ERROR_CHECK(err_code);
-}
 
 void init_saadc_for_blocking_sample_conversion(nrf_saadc_channel_config_t channel_config)
 {
@@ -1544,25 +1473,19 @@ void saadc_init(void)
     nrf_saadc_input_t ANALOG_INPUT;
     // Change pin depending on global control boolean
     if (!PH_IS_READ) {
-        //NRF_LOG_INFO("Setting saadc input to AIN2\n");
         ANALOG_INPUT = NRF_SAADC_INPUT_AIN2;
     }
     else if (!(PH_IS_READ && BATTERY_IS_READ)) {
-        //NRF_LOG_INFO("Setting saadc input to AIN3\n");
         ANALOG_INPUT = NRF_SAADC_INPUT_AIN3;
     }
     else {
-        //NRF_LOG_INFO("Setting saadc input to AIN1\n");
         ANALOG_INPUT = NRF_SAADC_INPUT_AIN1;        
     }
 
     nrf_saadc_channel_config_t channel_config =
             NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(ANALOG_INPUT);
     
-//    if (!CAL_MODE)
-//      init_saadc_for_buffer_conversion(channel_config);
-//    else 
-      init_saadc_for_blocking_sample_conversion(channel_config);
+    init_saadc_for_blocking_sample_conversion(channel_config);
 }
 
 
@@ -1571,19 +1494,10 @@ void saadc_init(void)
 void enable_pH_voltage_reading(void)
 {
     saadc_init();
-//    if (!CAL_MODE) {
-//      saadc_sampling_event_init();
-//      saadc_sampling_event_enable();
-//    }
-    read_saadc_for_regular_protocol();
+    if (!CAL_MODE) 
+        read_saadc_for_regular_protocol();
 }
 
-void restart_pH_interval_timer(void)
-{
-      ret_code_t err_code;
-      err_code = app_timer_start(m_timer_id, APP_TIMER_TICKS(DATA_INTERVAL), NULL);
-      APP_ERROR_CHECK(err_code);
-}
 
 /* Function unitializes and disables SAADC sampling, restarts timer
  */
@@ -1591,15 +1505,9 @@ void disable_pH_voltage_reading(void)
 {
     NRF_LOG_INFO("\n*** Disabling pH voltage reading ***\n\n");
     NRF_LOG_FLUSH();
-    ret_code_t err_code;
-//    nrf_drv_timer_disable(&m_timer);
-//    err_code = nrfx_ppi_channel_free(m_ppi_channel);
-//    APP_ERROR_CHECK(err_code);
     nrfx_saadc_uninit();
     NVIC_ClearPendingIRQ(SAADC_IRQn);
-    while(nrfx_saadc_is_busy()) {
-        // make sure SAADC is not busy
-    }
+    while(nrfx_saadc_is_busy()) {}
 
     // *** DISABLE BIASING CIRCUITRY ***
     disable_isfet_circuit();
@@ -1625,8 +1533,21 @@ void single_shot_timer_handler()
     enable_pH_voltage_reading();
 
     /*
-     *  UNCOMMENT TO SEND DATA
+     *  COMMENT TO NOT SEND DATA
      * * * * * * * * * * * * * * */
+}
+
+void disconn_delay_timer_handler()
+{
+    // disable timer
+    ret_code_t err_code;
+    err_code = app_timer_stop(m_timer_disconn_delay);
+    APP_ERROR_CHECK(err_code);
+
+    // Disconnect from central
+    err_code = sd_ble_gap_disconnect(m_conn_handle, 
+                                     BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+    APP_ERROR_CHECK(err_code);
 }
 
 
@@ -1640,6 +1561,10 @@ void timers_init(void)
     err_code = app_timer_create(&m_timer_id,
                                 APP_TIMER_MODE_SINGLE_SHOT,
                                 single_shot_timer_handler);
+    APP_ERROR_CHECK(err_code);
+    err_code = app_timer_create(&m_timer_disconn_delay,
+                                APP_TIMER_MODE_SINGLE_SHOT,
+                                disconn_delay_timer_handler);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -1666,10 +1591,19 @@ void send_data_and_restart_timer()
                     APP_ERROR_CHECK(err_code);              
              }
           } while (err_code == NRF_ERROR_RESOURCES);
-          // Disconnect
-          err_code = sd_ble_gap_disconnect(m_conn_handle, 
-                                           BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-          APP_ERROR_CHECK(err_code);
+          
+          if (DISCONN_DELAY) {
+              // Delay before disconnecting from central
+              err_code = app_timer_start(m_timer_disconn_delay, 
+                                         APP_TIMER_TICKS(DISCONN_DELAY_MS), NULL);
+              APP_ERROR_CHECK(err_code);
+          }
+          else {
+              err_code = 
+                  sd_ble_gap_disconnect(m_conn_handle, 
+                                        BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+              APP_ERROR_CHECK(err_code);
+          }
     }
     // Add most recent data to buffer, then send all data in buffer
     else {
@@ -1773,9 +1707,6 @@ void linreg(int num, double x[], double y[])
 
 void my_fds_evt_handler(fds_evt_t const * const p_fds_evt)
 {
-    //NRF_LOG_INFO("INSIDE FDS EVENT HANDLER");
-    //NRF_LOG_INFO("    FDS ID: %d, FDS RESULT: %d \n", p_fds_evt->id, p_fds_evt->result);
-    //NRF_LOG_FLUSH();
     switch (p_fds_evt->id)
     {
         case FDS_EVT_INIT:
@@ -1861,7 +1792,7 @@ static void fds_update(float value, uint16_t FILE_ID, uint16_t REC_KEY)
     {
         NRF_LOG_INFO("ERROR WRITING UPDATE TO FLASH\n");
     }
-    NRF_LOG_INFO("SUCCESS WRITING UPDATE TO FLASH\n");
+    NRF_LOG_INFO("SUCCESS WRITING UPDATE TO FLASH");
     NRF_LOG_FLUSH();
 }
 
@@ -1869,12 +1800,12 @@ float fds_read(uint16_t FILE_ID, uint16_t REC_KEY)
 {
     fds_flash_record_t  flash_record;
     fds_record_desc_t  record_desc;
-    fds_find_token_t    ftok ={0};//Important, make sure you zero init the ftok token
+    fds_find_token_t    ftok ={0};   //Important, make sure to zero init the ftok token
     float *p_data;
     float data;
     uint32_t err_code;
     
-    NRF_LOG_INFO("Start searching... \r\n");
+    NRF_LOG_INFO("Start flash search... \r\n");
     // Loop until all records with the given key and file ID have been found.
     while (fds_record_find(FILE_ID, REC_KEY, &record_desc, &ftok) == FDS_SUCCESS)
     {
@@ -1892,7 +1823,6 @@ float fds_read(uint16_t FILE_ID, uint16_t REC_KEY)
                 NRF_LOG_INFO("Data read: " NRF_LOG_FLOAT_MARKER "\n", NRF_LOG_FLOAT(data));
         }
         NRF_LOG_INFO("\r\n");
-        // Access the record through the flash_record structure.
         // Close the record when done.
         err_code = fds_record_close(&record_desc);
         if (err_code != FDS_SUCCESS)
@@ -2002,10 +1932,18 @@ void send_next_packet_in_buffer()
      if (PACK_CTR == TOTAL_DATA_IN_BUFFERS) {
          reset_data_buffers();
          SEND_BUFFERED_DATA = false;
-       err_code = 
-            sd_ble_gap_disconnect(m_conn_handle, 
-                                  BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-       APP_ERROR_CHECK(err_code);
+         if (DISCONN_DELAY) {
+            // Delay before disconnecting from central
+            err_code = app_timer_start(m_timer_disconn_delay, 
+                                       APP_TIMER_TICKS(DISCONN_DELAY_MS), NULL);
+            APP_ERROR_CHECK(err_code);
+         }
+         else {
+             err_code = 
+                  sd_ble_gap_disconnect(m_conn_handle, 
+                                        BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+             APP_ERROR_CHECK(err_code);
+        }
       }
 }
 
