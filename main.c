@@ -244,9 +244,6 @@ uint16_t   total_size = 20;
 #define CAL_DONE_FILE_ID  0x4440
 #define CAL_DONE_REC_KEY  0x4441
 
-
-
-static const nrf_drv_timer_t   m_timer = NRF_DRV_TIMER_INSTANCE(1);
 static       nrf_saadc_value_t m_buffer_pool[1][SAMPLES_IN_BUFFER];
 static       nrf_ppi_channel_t m_ppi_channel;
 
@@ -701,24 +698,15 @@ void disconnect_from_central()
 void check_for_calibration(char **packet)
 {
     // Possible Strings to be received by pH device
-    char *STARTCAL1 = "STARTCAL1";
-    char *STARTCAL2 = "STARTCAL2";
-    char *STARTCAL3 = "STARTCAL3";
+    char *STARTCAL  = "STARTCAL";
     char *PWROFF    = "PWROFF";
-    char *PT1       = "PT1";
-    char *PT2       = "PT2";
-    char *PT3       = "PT3";
-
+    char *PT        = "PT";
     // Possible strings to send to mobile application
     char *CALBEGIN = "CALBEGIN";
-    char *PT1CONF  = "PT1CONF";
-    char *PT2CONF  = "PT2CONF";
-    char *PT3CONF  = "PT3CONF";
-
+    char PT_CONFS[3][8] = {"PT1CONF", "PT2CONF", "PT3CONF"};
     // Variables to hold sizes of strings for ble_nus_send function
     uint16_t SIZE_BEGIN = 9;
     uint16_t SIZE_CONF  = 8;
-
     // Used for parsing out pH value from PT1_X.Y (etc) packets
     char pH_val_substring[4];
 
@@ -730,81 +718,47 @@ void check_for_calibration(char **packet)
         nrfx_gpiote_out_clear(CHIP_POWER_PIN);
     }
 
-    if (strstr(*packet, STARTCAL1) != NULL){
-        stop_disconn_delay_timer();
+    if (strstr(*packet, STARTCAL) != NULL) {
+        char cal_pts_str[1];
         CAL_MODE = true;
-        NUM_CAL_PTS = 1;
-        // Make sure other processes are stopped and reset so calibration can occur
-        disable_pH_voltage_reading();
-        err_code = ble_nus_data_send(&m_nus, CALBEGIN, &SIZE_BEGIN, m_conn_handle);
-        APP_ERROR_CHECK(err_code);
-    }
-    else if (strstr(*packet, STARTCAL2) != NULL){
         stop_disconn_delay_timer();
-        CAL_MODE = true;
-        NUM_CAL_PTS = 2;
-        // Make sure other processes are stopped and reset so calibration can occur
         disable_pH_voltage_reading();
-        err_code = ble_nus_data_send(&m_nus, CALBEGIN, &SIZE_BEGIN, m_conn_handle);
-        APP_ERROR_CHECK(err_code);
-    }
-    else if (strstr(*packet, STARTCAL3) != NULL) {
-        stop_disconn_delay_timer();
-        CAL_MODE = true;
-        NUM_CAL_PTS = 3;
-        // Make sure other processes are stopped and reset so calibration can occur
-        disable_pH_voltage_reading();
+        // Parse integer from STARTCALX packet, where X is 1, 2 or 3
+        substring(*packet, cal_pts_str, 9, 1);
+        NUM_CAL_PTS = atoi(cal_pts_str);
+        NRF_LOG_INFO("NUM_CAL_PTS: %d\n", NUM_CAL_PTS);
         err_code = ble_nus_data_send(&m_nus, CALBEGIN, &SIZE_BEGIN, m_conn_handle);
         APP_ERROR_CHECK(err_code);
     }
 
-    if (strstr(*packet, PT1) != NULL) {
-        // Parse out the pH value from the packet, will always be format "X.Y"
+    if (strstr(*packet, PT) != NULL) {
+        char cal_pt_str[1];
+        int cal_pt = 0;
+        // Parse out calibration point from packet
+        substring(*packet, cal_pt_str, 3, 1);
+        NRF_LOG_INFO("Parsed curr cal_pt: %d\n", atoi(cal_pt_str));
+        cal_pt = atoi(cal_pt_str);
+        // Parse out pH value from packet
         substring(*packet, pH_val_substring, 5, 3);
-        PT1_PH_VAL = atof(pH_val_substring);   
-
+        // Assign pH value to appropriate variable
+        if (cal_pt == 1)
+            PT1_PH_VAL = atof(pH_val_substring); 
+        else if (cal_pt == 2)
+            PT2_PH_VAL = atof(pH_val_substring); 
+        else if (cal_pt == 3)
+            PT3_PH_VAL = atof(pH_val_substring); 
+        // Read calibration data and send confirmation packet
         read_saadc_for_calibration();
-        err_code = ble_nus_data_send(&m_nus, PT1CONF, &SIZE_CONF, m_conn_handle);
+        err_code = ble_nus_data_send(&m_nus, PT_CONFS[cal_pt - 1], 
+                                     &SIZE_CONF, m_conn_handle);
         APP_ERROR_CHECK(err_code);
-        // Restart normal data transmision once calibration is complete
-        if (NUM_CAL_PTS == 1) {
-          perform_calibration(1);
+        // Restart normal data transmission if calibration is complete
+        if (NUM_CAL_PTS == cal_pt) {
+          perform_calibration(cal_pt);
           write_cal_values_to_flash();
           reset_calibration_state();
           disconnect_from_central();
         }
-    }
-    else if (strstr(*packet, PT2) != NULL) {
-        // Parse out the pH value from the packet, will always be format "X.Y"
-        substring(*packet, pH_val_substring, 5, 3);
-        PT2_PH_VAL = atof(pH_val_substring);
-        
-        read_saadc_for_calibration();
-        err_code = ble_nus_data_send(&m_nus, PT2CONF, &SIZE_CONF, m_conn_handle);
-        APP_ERROR_CHECK(err_code);
-        // Restart normal data transmision once calibration is complete
-        if (NUM_CAL_PTS == 2) {
-          perform_calibration(2);
-          write_cal_values_to_flash();
-          reset_calibration_state();
-          disconnect_from_central();
-        }
-    }
-    else if (strstr(*packet, PT3) != NULL) {
-        // Parse out the pH value from the packet, will always be format "X.Y"
-        substring(*packet, pH_val_substring, 5, 3);
-        PT3_PH_VAL = atof(pH_val_substring); 
-       
-        read_saadc_for_calibration();
-        err_code = ble_nus_data_send(&m_nus, PT3CONF, &SIZE_CONF, m_conn_handle);
-        APP_ERROR_CHECK(err_code);
-        // Restart normal data transmision once calibration is complete
-        if (NUM_CAL_PTS == 3) {
-          perform_calibration(3);
-          write_cal_values_to_flash();
-          reset_calibration_state();
-          disconnect_from_central();
-        }    
     }
 }
 
@@ -858,7 +812,6 @@ void nus_data_handler(ble_nus_evt_t * p_evt)
     }
 
 }
-/**@snippet [Handling the data received over BLE] */
 
 
 /**@brief Function for initializing services that will be used by the application.
@@ -1306,52 +1259,6 @@ void disable_isfet_circuit(void)
      nrfx_gpiote_out_uninit(ENABLE_ISFET_PIN);
      nrfx_gpiote_uninit();
 
-}
-
-void timer_handler(nrf_timer_event_t event_type, void * p_context)
-{
-    // To Add Later
-}
-
-
-void saadc_sampling_event_init(void)
-{
-    ret_code_t err_code;
-
-    nrf_drv_timer_config_t timer_cfg = NRF_DRV_TIMER_DEFAULT_CONFIG;
-    timer_cfg.bit_width = NRF_TIMER_BIT_WIDTH_32;
-    err_code = nrf_drv_timer_init(&m_timer, &timer_cfg, timer_handler);
-    APP_ERROR_CHECK(err_code);
-
-    /* setup m_timer for compare event every 15us */
-    uint32_t ticks = nrf_drv_timer_us_to_ticks(&m_timer, 35);
-    nrf_drv_timer_extended_compare(&m_timer,
-                                   NRF_TIMER_CC_CHANNEL0,
-                                   ticks,
-                                   NRF_TIMER_SHORT_COMPARE0_CLEAR_MASK,
-                                   false);
-    nrf_drv_timer_enable(&m_timer);
-
-    uint32_t timer_compare_event_addr = 
-                nrf_drv_timer_compare_event_address_get(&m_timer,
-                                                        NRF_TIMER_CC_CHANNEL0);
-    uint32_t saadc_sample_task_addr   = nrf_drv_saadc_sample_task_get();
-
-    /* setup ppi channel so that timer compare event triggers task in SAADC */
-    err_code = nrf_drv_ppi_channel_alloc(&m_ppi_channel);
-    APP_ERROR_CHECK(err_code);
-
-    err_code = nrf_drv_ppi_channel_assign(m_ppi_channel,
-                                          timer_compare_event_addr,
-                                          saadc_sample_task_addr);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-void saadc_sampling_event_enable(void)
-{
-    ret_code_t err_code = nrf_drv_ppi_channel_enable(m_ppi_channel);
-    APP_ERROR_CHECK(err_code);
 }
 
 
@@ -1885,7 +1792,7 @@ static void fds_update(float value, uint16_t FILE_ID, uint16_t REC_KEY)
     {
         NRF_LOG_INFO("ERROR WRITING UPDATE TO FLASH\n");
     }
-    NRF_LOG_INFO("SUCCESS WRITING UPDATE TO FLASH\n");
+    NRF_LOG_INFO("SUCCESS WRITING UPDATE TO FLASH");
     NRF_LOG_FLUSH();
 }
 
