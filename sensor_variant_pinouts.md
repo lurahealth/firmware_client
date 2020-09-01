@@ -98,7 +98,11 @@ GPIO mappings across all PCB versions. This document lists GPIO mappings.
 
 **H_WIN_AL**
 
-        *In progress*
+        V_TEMP (thermistor output) : P0.03/AIN1
+        VOUT (sensor output)       : P0.04/AIN2
+        BT_ADC (battery voltage)   : P0.05/AIN3
+        PWR_EN (LDO enable logic)  : P0.08
+        POWER_ON (switch logic)    : P0.12
 
 **H_IMEC_AL**
 
