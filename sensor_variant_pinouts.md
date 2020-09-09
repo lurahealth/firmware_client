@@ -36,7 +36,11 @@ GPIO mappings across all PCB versions. This document lists GPIO mappings.
 
 **R_WEL_A**
 
-        *In progress*
+        V_TEMP (thermistor output) : P0.03/AIN1
+        VOUT (sensor output)       : P0.04/AIN2
+        BT_ADC (battery voltage)   : P0.05/AIN3
+        PWR_EN (LDO enable logic)  : P0.08
+        POWER_ON (switch logic)    : P0.12
 
 **R_IMEC_A**
 
@@ -78,23 +82,43 @@ GPIO mappings across all PCB versions. This document lists GPIO mappings.
 
 **M2_WIN_A**
 
-        *In progress*
+        V_TEMP (thermistor output) : P0.03/AIN1
+        VOUT (sensor output)       : P0.04/AIN2
+        BT_ADC (battery voltage)   : P0.05/AIN3
+        PWR_EN (LDO enable logic)  : P0.08
+        POWER_ON (switch logic)    : P0.12
 
 **M2_WIN_L**
 
-        *In progress*
+        V_TEMP (thermistor output) : P0.03/AIN1
+        VOUT (sensor output)       : P0.04/AIN2
+        BT_ADC (battery voltage)   : P0.05/AIN3
+        PWR_EN (LDO enable logic)  : P0.08
+        POWER_ON (switch logic)    : P0.12
 
 **M2_MICRO_A**
 
-        *In progress*
+        V_TEMP (thermistor output) : P0.03/AIN1
+        VOUT (sensor output)       : P0.04/AIN2
+        BT_ADC (battery voltage)   : P0.05/AIN3
+        PWR_EN (LDO enable logic)  : P0.08
+        POWER_ON (switch logic)    : P0.12
 
 **M2_WEL_A**
 
-        *In progress*
+        V_TEMP (thermistor output) : P0.03/AIN1
+        VOUT (sensor output)       : P0.04/AIN2
+        BT_ADC (battery voltage)   : P0.05/AIN3
+        PWR_EN (LDO enable logic)  : P0.08
+        POWER_ON (switch logic)    : P0.12
 
 **M2_TEMP_L**
 
-        *In progress*
+        V_TEMP (thermistor output) : P0.03/AIN1
+        VOUT (sensor output)       : P0.04/AIN2
+        BT_ADC (battery voltage)   : P0.05/AIN3
+        PWR_EN (LDO enable logic)  : P0.08
+        POWER_ON (switch logic)    : P0.12
 
 **H_WIN_AL**
 
