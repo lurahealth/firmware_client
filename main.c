@@ -617,7 +617,6 @@ void read_saadc_for_calibration(void)
       AVG_PX_VAL += saadc_result_to_mv(temp_val);
     }
     AVG_PX_VAL = AVG_PX_VAL / NUM_SAMPLES;
-    NRF_LOG_INFO("average mV during calibration: " NRF_LOG_FLOAT_MARKER " ", NRF_LOG_FLOAT(AVG_PX_VAL));
     // Assign averaged readings to the correct calibration point
     if(!PT1_READ){
       PT1_MV_VAL = (double)AVG_PX_VAL;
@@ -1283,17 +1282,12 @@ double calculate_px_from_mV(uint32_t px_val)
  */
 void pack_calibrated_px_val(uint32_t px_mv_val, uint8_t* total_packet, uint8_t p)
 {
-    NRF_LOG_INFO("Packing calibrated px value");
     uint32_t ASCII_DIG_BASE = 48;
-    NRF_LOG_INFO("px_mv_val: %d", px_mv_val);
     double pX_value = calculate_px_from_mV(px_mv_val);
-    NRF_LOG_INFO("pX val: " NRF_LOG_FLOAT_MARKER " ", NRF_LOG_FLOAT(pX_value));
     double x_mmol_L = px_to_mmol_per_L(pX_value);
     double x_decimal_vals = (x_mmol_L - floor(x_mmol_L)) * 100;
     // Round K decimal values to nearest 0.1 accuracy
     x_decimal_vals = round(x_decimal_vals / 10) * 10;
-    NRF_LOG_INFO("x full val: " NRF_LOG_FLOAT_MARKER " ", NRF_LOG_FLOAT(x_mmol_L));
-    NRF_LOG_INFO("x dec vals: " NRF_LOG_FLOAT_MARKER " ", NRF_LOG_FLOAT(x_decimal_vals));
     // If decimals rounds to 100, increment k_mmol_l and set decimals to 0
     if (x_decimal_vals == 100) {
         x_mmol_L = x_mmol_L + 1.0;
@@ -1312,7 +1306,6 @@ void pack_temperature_val(uint32_t temp_val, uint8_t* total_packet, uint8_t p)
 {
     uint32_t ASCII_DIG_BASE = 48;
     double real_temp = calculate_celsius_from_mv(temp_val);
-    NRF_LOG_INFO("temp celsius: " NRF_LOG_FLOAT_MARKER " \n", NRF_LOG_FLOAT(real_temp));
     double temp_decimal_vals = (real_temp - floor(real_temp)) * 100;
     total_packet[p]   = (uint8_t) ((uint8_t)floor(real_temp / 10) + ASCII_DIG_BASE);
     total_packet[p+1] = (uint8_t) ((uint8_t)floor((uint8_t)real_temp % 10) + ASCII_DIG_BASE);
