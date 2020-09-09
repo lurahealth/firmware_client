@@ -584,10 +584,26 @@ void substring(char s[], char sub[], int p, int l) {
    sub[c] = '\0';
 }
 
+/* Takes mmol/L value and converts to pK or pNa
+ */
+double mmol_per_L_to_px(double mmol_L)
+{
+    // Convert mmol/L to mol/L
+    double mol_L = mmol_L / 1000;
+    return -log10(mol_L);
+}
+
+/* Takes pK or pNa value and converts to mmol/L
+ */
+double px_to_mmol_per_L(double px)
+{
+    return pow(10.0, -px) * 1000;
+}
+
 // Read saadc values for temperature, battery level, and px to store for calibration
 void read_saadc_for_calibration(void) 
 {
-    int NUM_SAMPLES = 50;
+    int NUM_SAMPLES = 150;
     nrf_saadc_value_t temp_val = 0;
     ret_code_t err_code;
     AVG_PX_VAL = 0;
@@ -601,6 +617,7 @@ void read_saadc_for_calibration(void)
       AVG_PX_VAL += saadc_result_to_mv(temp_val);
     }
     AVG_PX_VAL = AVG_PX_VAL / NUM_SAMPLES;
+    NRF_LOG_INFO("average mV during calibration: " NRF_LOG_FLOAT_MARKER " ", NRF_LOG_FLOAT(AVG_PX_VAL));
     // Assign averaged readings to the correct calibration point
     if(!PT1_READ){
       PT1_MV_VAL = (double)AVG_PX_VAL;
@@ -691,9 +708,6 @@ void check_for_calibration(char **packet)
     // Variables to hold sizes of strings for ble_nus_send function
     uint16_t SIZE_BEGIN = 9;
     uint16_t SIZE_CONF  = 8;
-    // Used for parsing out px value from PT1_X.Y (etc) packets
-    char px_val_substring[4];
-
     uint32_t err_code;
 
     if (strstr(*packet, PWROFF) != NULL){
@@ -715,20 +729,21 @@ void check_for_calibration(char **packet)
     }
 
     if (strstr(*packet, PT) != NULL) {
+        char px_val_substring[5];
         char cal_pt_str[1];
         int cal_pt = 0;
         // Parse out calibration point from packet
         substring(*packet, cal_pt_str, 3, 1);
         cal_pt = atoi(cal_pt_str);
         // Parse out px value from packet
-        substring(*packet, px_val_substring, 5, 3);
+        substring(*packet, px_val_substring, 5, 4);
         // Assign px value to appropriate variable
         if (cal_pt == 1)
-            PT1_PX_VAL = atof(px_val_substring); 
+            PT1_PX_VAL = mmol_per_L_to_px(atof(px_val_substring)); 
         else if (cal_pt == 2)
-            PT2_PX_VAL = atof(px_val_substring); 
+            PT2_PX_VAL = mmol_per_L_to_px(atof(px_val_substring)); 
         else if (cal_pt == 3)
-            PT3_PX_VAL = atof(px_val_substring); 
+            PT3_PX_VAL = mmol_per_L_to_px(atof(px_val_substring)); 
         // Read calibration data and send confirmation packet
         read_saadc_for_calibration();
         err_code = ble_nus_data_send(&m_nus, PT_CONFIRMS[cal_pt - 1], 
@@ -1256,104 +1271,70 @@ void restart_saadc(void)
     enable_px_voltage_reading(); 
 }
 
-/* TCalculates px from a mV value using values set during calibration
- */
 double calculate_px_from_mV(uint32_t px_val)
 {
     // px = (px_val - BVAL_CALIBRATION) / (MVAL_CALIBRATION)
     return ((double)px_val * MVAL_CALIBRATION) + BVAL_CALIBRATION;
 }
 
-// Packs calibrated px value into total_packet[0-3], rounded to nearest 0.25 px
-void pack_calibrated_px_val(uint32_t px_val, float px_val_cal, 
-                                             uint8_t* total_packet)
+/* Calculates the pK value from stored mv value, then converts from pK to mmol/L.
+ * Data is rounded to nearest 0.1 mmol/L decimal place. Stores each digit from 
+ * packet[p] to packet[p+3]
+ */
+void pack_calibrated_px_val(uint32_t px_mv_val, uint8_t* total_packet, uint8_t p)
 {
+    NRF_LOG_INFO("Packing calibrated px value");
     uint32_t ASCII_DIG_BASE = 48;
-    // If calibration has not been performed, store 0000 in real px field [0-3],
-    // and store the raw SAADC data in the last field [15-18]
-    if (!CAL_PERFORMED) {
-      for(int i = 3; i >= 0; i--){
-        total_packet[i] = 0 + ASCII_DIG_BASE;
-      }
+    NRF_LOG_INFO("px_mv_val: %d", px_mv_val);
+    double pX_value = calculate_px_from_mV(px_mv_val);
+    NRF_LOG_INFO("pX val: " NRF_LOG_FLOAT_MARKER " ", NRF_LOG_FLOAT(pX_value));
+    double x_mmol_L = px_to_mmol_per_L(pX_value);
+    double x_decimal_vals = (x_mmol_L - floor(x_mmol_L)) * 100;
+    // Round K decimal values to nearest 0.1 accuracy
+    x_decimal_vals = round(x_decimal_vals / 10) * 10;
+    NRF_LOG_INFO("x full val: " NRF_LOG_FLOAT_MARKER " ", NRF_LOG_FLOAT(x_mmol_L));
+    NRF_LOG_INFO("x dec vals: " NRF_LOG_FLOAT_MARKER " ", NRF_LOG_FLOAT(x_decimal_vals));
+    // If decimals rounds to 100, increment k_mmol_l and set decimals to 0
+    if (x_decimal_vals == 100) {
+        x_mmol_L = x_mmol_L + 1.0;
+        x_decimal_vals = 0.00;
     }
-    // If calibration has been performed, store eal px in [0-3],
-    // and store the raw millivolt data in the last field [15-18]
-    else if (CAL_PERFORMED) {
-      double real_px = 0;
-      if (px_val_cal == NULL) {
-        NRF_LOG_INFO("*** px_val_cal == NULL ***");
-        real_px = calculate_px_from_mV(px_val);
-      }
-      else if (px_val_cal != NULL) {
-        NRF_LOG_INFO("*** px_val_cal != NULL ***");
-        real_px = px_val_cal;
-      }
-      double px_decimal_vals = (real_px - floor(real_px)) * 100;
-      // Round px values to 0.25 px accuracy
-      px_decimal_vals = round(px_decimal_vals / 25) * 25;
-      // If decimals round to 100, increment real px value and set decimals to 0.00
-      if (px_decimal_vals == 100) {
-        real_px = real_px + 1.0;
-        px_decimal_vals = 0.00;
-      }
-      // If px is 9.99 or lower, format with 2 decimal places (4 bytes total)
-      if (real_px < 10.0) {
-        total_packet[0] = (uint8_t) ((uint8_t)floor(real_px) + ASCII_DIG_BASE);
-        total_packet[1] = 46;
-        total_packet[2] = (uint8_t) (((uint8_t)px_decimal_vals / 10) + ASCII_DIG_BASE);
-        total_packet[3] = (uint8_t) (((uint8_t)px_decimal_vals % 10) + ASCII_DIG_BASE);
-      }
-      // If px is 10.0 or greater, format with 1 decimal place (still 4 bytes total)
-      else {
-        total_packet[0] = (uint8_t) ((uint8_t)floor(real_px / 10) + ASCII_DIG_BASE);
-        total_packet[1] = (uint8_t) ((uint8_t)floor((uint8_t)real_px % 10) + ASCII_DIG_BASE);
-        total_packet[2] = 46;
-        total_packet[3] = (uint8_t) (((uint8_t)px_decimal_vals / 10) + ASCII_DIG_BASE);
-      }
-    }
+    total_packet[p]   = (uint8_t) ((uint8_t)floor(x_mmol_L / 10) + ASCII_DIG_BASE);
+    total_packet[p+1] = (uint8_t) ((uint8_t)floor((uint8_t)x_mmol_L % 10) + ASCII_DIG_BASE);
+    total_packet[p+2] = 46;
+    total_packet[p+3] = (uint8_t) (((uint8_t)x_decimal_vals / 10) + ASCII_DIG_BASE);
 }
 
-// Packs temperature value into total_packet[5-8], as degrees Celsius
-void pack_temperature_val(uint32_t temp_val, uint8_t* total_packet)
+/* Packs temperature value into total_packet[5-8], as degrees Celsius.
+ * Stores each digit from packet[p] to packet[p+3], with 0.1 C accuracy
+ */
+void pack_temperature_val(uint32_t temp_val, uint8_t* total_packet, uint8_t p)
 {
     uint32_t ASCII_DIG_BASE = 48;
     double real_temp = calculate_celsius_from_mv(temp_val);
     NRF_LOG_INFO("temp celsius: " NRF_LOG_FLOAT_MARKER " \n", NRF_LOG_FLOAT(real_temp));
     double temp_decimal_vals = (real_temp - floor(real_temp)) * 100;
-    total_packet[5] = (uint8_t) ((uint8_t)floor(real_temp / 10) + ASCII_DIG_BASE);
-    total_packet[6] = (uint8_t) ((uint8_t)floor((uint8_t)real_temp % 10) + ASCII_DIG_BASE);
-    total_packet[7] = 46;
-    total_packet[8] = (uint8_t) (((uint8_t)temp_decimal_vals / 10) + ASCII_DIG_BASE);
-
+    total_packet[p]   = (uint8_t) ((uint8_t)floor(real_temp / 10) + ASCII_DIG_BASE);
+    total_packet[p+1] = (uint8_t) ((uint8_t)floor((uint8_t)real_temp % 10) + ASCII_DIG_BASE);
+    total_packet[p+2] = 46;
+    total_packet[p+3] = (uint8_t) (((uint8_t)temp_decimal_vals / 10) + ASCII_DIG_BASE);
 }
 
-// Packs battery value into total_packet[10-13], as millivolts
-void pack_battery_val(uint32_t batt_val, uint8_t* total_packet)
+/* Packs a mV value between 0 - 3000 into char string total_packet, from 
+ * total_packet[p] to total_packet[p + l - 1]. Ex: 1234 --> ['1','2','3','4']
+ *
+ * uint8_t p is the position of most significat digit, i.e. '1' in 1234
+ * uint8_t l is the length of the number to be stored
+ */
+void pack_mv_value(uint32_t mv_val, uint8_t* total_packet, uint8_t p, uint8_t l)
 {
     uint32_t ASCII_DIG_BASE = 48;
     uint32_t temp = 0;            // hold intermediate divisions of variables
     // Packing protocol for number abcd: 
     //  [... 0, 0, 0, d] --> [... 0, 0, c, d] --> ... --> [... a, b, c, d]
-    temp = batt_val;
-    for(int i = 13; i >= 10; i--){
-        if (i == 13) total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
-        else {
-            temp = temp / 10;
-            total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
-        }
-    }
-}
-
-// Packs uncalibrated px value into total_packet[15-18], as millivolts
-void pack_uncalibrated_px_val(uint32_t px_val, uint8_t* total_packet)
-{
-    uint32_t ASCII_DIG_BASE = 48;
-    uint32_t temp = 0;            // hold intermediate divisions of variables
-    // Packing protocol for number abcd: 
-    //  [... 0, 0, 0, d] --> [... 0, 0, c, d] --> ... --> [... a, b, c, d]
-    temp = px_val;
-    for(int i = 18; i >= 15; i--){
-        if (i == 18) total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
+    temp = mv_val;
+    for(int i = p+l-1; i >= p; i--){
+        if (i == p+l-1) total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
         else {
             temp = temp / 10;
             total_packet[i] = (uint8_t)(temp % 10 + ASCII_DIG_BASE);
@@ -1374,10 +1355,11 @@ void create_bluetooth_packet(uint32_t px_val,   uint32_t batt_val,
          0 0 0 0,10};   raw px value arr[15-18], EOL arr[19]
     */
       
-    pack_calibrated_px_val(px_val, px_val_cal, total_packet);
-    pack_temperature_val(temp_val, total_packet);
-    pack_battery_val(batt_val, total_packet);
-    pack_uncalibrated_px_val(px_val, total_packet);   
+    if (CAL_PERFORMED)  
+        pack_calibrated_px_val(px_val, total_packet, 0);
+    pack_temperature_val(temp_val, total_packet, 5);
+    pack_mv_value(batt_val, total_packet, 10, 4);
+    pack_mv_value(px_val, total_packet, 15, 4);  
 }
 
 /* Converts SAADC result to mV value using gain, prescaler and resolution values
