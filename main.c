@@ -428,6 +428,10 @@ double mv_to_therm_resistance(uint32_t mv)
     Vtemp = (double) mv;
     therm_res = (Vtemp * R1) / (Vin - Vtemp);
 
+    // Catch invalid resistance values, set to 500 ohm if negative
+    if(therm_res < 500)
+        therm_res = 500;
+
     return therm_res;
 }
 
