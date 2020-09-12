@@ -244,10 +244,6 @@ uint16_t   total_size = 20;
 #define CAL_DONE_FILE_ID  0x4440
 #define CAL_DONE_REC_KEY  0x4441
 
-static       nrf_saadc_value_t m_buffer_pool[1][SAMPLES_IN_BUFFER];
-static       nrf_ppi_channel_t m_ppi_channel;
-
-
 // Forward declarations
 void create_bluetooth_packet(uint32_t ph_val, uint32_t batt_val,        
                              uint32_t temp_val, float ph_val_cal,
@@ -431,6 +427,10 @@ double mv_to_therm_resistance(uint32_t mv)
 
     Vtemp = (double) mv;
     therm_res = (Vtemp * R1) / (Vin - Vtemp);
+
+    // Catch invalid resistance values, set to 500 ohm if negative
+    if(therm_res < 500)
+        therm_res = 500;
 
     return therm_res;
 }
@@ -1264,11 +1264,6 @@ void disable_isfet_circuit(void)
 
 void restart_saadc(void)
 {
-    ret_code_t err_code;
-    nrfx_timer_disable(&m_timer);
-    nrfx_timer_uninit(&m_timer);
-    err_code = nrfx_ppi_channel_free(m_ppi_channel);
-    APP_ERROR_CHECK(err_code);
     nrfx_saadc_uninit();
     NVIC_ClearPendingIRQ(SAADC_IRQn);
     while(nrfx_saadc_is_busy()) {
