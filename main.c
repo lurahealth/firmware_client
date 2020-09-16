@@ -1623,9 +1623,12 @@ void disconn_delay_timer_handler()
     APP_ERROR_CHECK(err_code);
 
     // Disconnect from central
-    err_code = sd_ble_gap_disconnect(m_conn_handle, 
-                                     BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-    APP_ERROR_CHECK(err_code);
+    if (m_conn_handle != BLE_CONN_HANDLE_INVALID) {
+      // Disconnect from central
+      err_code = sd_ble_gap_disconnect(m_conn_handle, 
+                                       BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+      APP_ERROR_CHECK(err_code);
+    }
 }
 
 
