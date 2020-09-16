@@ -144,10 +144,8 @@
 #define SEC_PARAM_MIN_KEY_SIZE          7                                           /**< Minimum encryption key size. */
 #define SEC_PARAM_MAX_KEY_SIZE          16                                          /**< Maximum encryption key size. */
 
-#define SAMPLES_IN_BUFFER               50                                          /**< SAADC buffer > */
-
-#define DATA_INTERVAL                   900000
-
+//#define DATA_INTERVAL                   900000
+#define DATA_INTERVAL                   500
 
 #define NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(PIN_P) \
 {                                                   \
@@ -193,28 +191,28 @@ static ble_uuid_t m_adv_uuids[]          =                                      
 #define CHIP_POWER_PIN   12
 
 /* GLOBALS */
-uint32_t AVG_PX_VAL        = 0;
-uint32_t AVG_BATT_VAL      = 0;
-uint32_t AVG_TEMP_VAL      = 0;
-uint32_t HVN_COUNTER       = 0;
-uint32_t PACK_CTR          = 0;
+uint32_t AVG_PX_VAL   = 0;
+uint32_t AVG_BATT_VAL = 0;
+uint32_t AVG_TEMP_VAL = 0;
+uint32_t HVN_COUNTER  = 0;
+uint32_t PACK_CTR     = 0;
 bool     SEND_BUFFERED_DATA  = false;
 bool     HVN_TX_EVT_COMPLETE = false;
-bool     PX_IS_READ        = false;
-bool     BATTERY_IS_READ   = false;
-bool     SAADC_CALIBRATED  = false;
-bool     CONNECTION_MADE   = false;
-bool     CAL_MODE          = false;
-bool     READ_CAL_DATA     = false;
-bool     PT1_READ          = false;
-bool     PT2_READ          = false;
-bool     PT3_READ          = false;
-double   PT1_PX_VAL        = 0;
-double   PT1_MV_VAL        = 0;
-double   PT2_PX_VAL        = 0;
-double   PT2_MV_VAL        = 0;
-double   PT3_PX_VAL        = 0;
-double   PT3_MV_VAL        = 0;
+bool     PX_IS_READ          = false;
+bool     BATTERY_IS_READ     = false;
+bool     SAADC_CALIBRATED    = false;
+bool     CONNECTION_MADE     = false;
+bool     CAL_MODE            = false;
+bool     PT1_READ            = false;
+bool     PT2_READ            = false;
+bool     PT3_READ            = false;
+float     PT1_PX_VAL        = 0;
+float     PT1_MV_VAL        = 0;
+float     PT2_PX_VAL        = 0;
+float     PT2_MV_VAL        = 0;
+float     PT3_PX_VAL        = 0;
+float     PT3_MV_VAL        = 0;
+float     REF_TEMP          = 0;
 int      NUM_CAL_PTS       = 0;
 float     MVAL_CALIBRATION  = 0;
 float     BVAL_CALIBRATION  = 0;
@@ -240,9 +238,6 @@ uint16_t   total_size = 20;
 #define CAL_DONE_FILE_ID  0x4440
 #define CAL_DONE_REC_KEY  0x4441
 
-static       nrf_saadc_value_t m_buffer_pool[1][SAMPLES_IN_BUFFER];
-static       nrf_ppi_channel_t m_ppi_channel;
-
 
 // Forward declarations
 void create_bluetooth_packet(uint32_t px_val, uint32_t batt_val,        
@@ -260,13 +255,15 @@ void turn_chip_power_off         (void);
 void restart_saadc              (void);
 void write_cal_values_to_flash   (void);
 void check_for_buffer_done_signal(char **packet);
-void linreg                     (int num, double x[], double y[]);
+void linreg                     (int num, float x[], float y[]);
 void perform_calibration        (uint8_t cal_pts);
-double calculate_px_from_mV     (uint32_t px_val);
-double calculate_celsius_from_mv(uint32_t mv);
+float calculate_px_from_mV       (uint32_t px_val);
+float calculate_celsius_from_mv  (uint32_t mv);
+float validate_float_range        (float val);
 static void advertising_start   (bool erase_bonds);
 static void idle_state_handle   (void);
 uint32_t saadc_result_to_mv     (uint32_t saadc_result);
+uint32_t sensor_temp_comp       (uint32_t raw_analyte_mv, uint32_t temp_mv);
 
 /* 
  * Buffers for storing data through System ON sleep periods
@@ -333,8 +330,10 @@ void add_data_to_buffers(void)
     px_mv[i]   = (uint16_t) AVG_PX_VAL;
     temp_mv[i] = (uint16_t) AVG_TEMP_VAL;
     batt_mv[i] = (uint16_t) AVG_BATT_VAL;
-    if(CAL_PERFORMED)
-        px_cal[i] = (float) calculate_px_from_mV(AVG_PX_VAL);
+    if(CAL_PERFORMED) {
+        float px_cal_val = calculate_px_from_mV(sensor_temp_comp(AVG_PX_VAL, AVG_TEMP_VAL));
+        px_cal[i] = validate_float_range(px_cal_val);
+    }
     TOTAL_DATA_IN_BUFFERS++;
 }
 
@@ -418,14 +417,14 @@ void check_for_buffer_done_signal(char **packet)
  */
 
 // Helper function to convert millivolts to thermistor resistance
-double mv_to_therm_resistance(uint32_t mv)
+float mv_to_therm_resistance(uint32_t mv)
 {
-    double therm_res = 0;
-    double Vtemp     = 0;
-    double R1        = 10000.0;
-    double Vin       = 1800;
+    float therm_res = 0;
+    float Vtemp     = 0;
+    float R1        = 10000.0;
+    float Vin       = 1800;
 
-    Vtemp = (double) mv;
+    Vtemp = (float) mv;
     therm_res = (Vtemp * R1) / (Vin - Vtemp);
 
     // Catch invalid resistance values, set to 500 ohm if negative
@@ -436,13 +435,13 @@ double mv_to_therm_resistance(uint32_t mv)
 }
 
 // Helper function to convert thermistor resistance to Kelvins
-double therm_resistance_to_kelvins(double therm_res)
+float therm_resistance_to_kelvins(float therm_res)
 {
-    double kelvins_constant = 273.15;
-    double ref_temp         = 25.0 + kelvins_constant;
-    double ref_resistance   = 10000.0;
-    double beta_constant    = 3380.0;
-    double real_kelvins     = 0;
+    float kelvins_constant = 273.15;
+    float ref_temp         = 25.0 + kelvins_constant;
+    float ref_resistance   = 10000.0;
+    float beta_constant    = 3380.0;
+    float real_kelvins     = 0;
 
     real_kelvins = (beta_constant * ref_temp) / 
                       (beta_constant + (ref_temp * log(therm_res/ref_resistance)));
@@ -451,23 +450,61 @@ double therm_resistance_to_kelvins(double therm_res)
 }
 
 // Helper function to convert Kelvins to Celsius
-double kelvins_to_celsius(double kelvins)
+float kelvins_to_celsius(float kelvins)
 {
-    double kelvins_constant = 273.15;
+    float kelvins_constant = 273.15;
     return kelvins - kelvins_constant;
 }
 
 // Function to fully convert temperature millivolt output to degrees celsius
-double calculate_celsius_from_mv(uint32_t mv)
+float calculate_celsius_from_mv(uint32_t mv)
 {
-    double therm_res = 0;
-    double kelvins   = 0;
-    double celsius   = 0;
+    float therm_res = 0;
+    float kelvins   = 0;
+    float celsius   = 0;
     therm_res = mv_to_therm_resistance(mv);
     kelvins   = therm_resistance_to_kelvins(therm_res);
     celsius   = kelvins_to_celsius(kelvins);
 
+    // Round celsius to nearest 0.1
+    celsius = celsius * 100.0;
+    if ((uint32_t)celsius % 10 > 5)
+        celsius = celsius + 10.0;
+    celsius = celsius / 10.0;
+    celsius = round(celsius);
+    celsius = celsius / 10.0 + 0.000000001; // Workaround for floating point error
+
     return celsius;
+}
+
+/* Adjusts analyte sensor mV output (raw_mv) based on temperature dependance.
+ * The analyte sensor output is linearly dependant on temperature, i.e. 1400mV
+ * @ 25C, 1405mV @ 30C, and 1410mV @ 35C may all represent the same pH value.
+ *
+ * Adjustment is made using the difference between reference temp (REF_TEMP)
+ * recorded during calibration, and current temp reading taken at the same
+ * time as the analyte sensor mV output.
+ */
+uint32_t sensor_temp_comp(uint32_t raw_analyte_mv, uint32_t temp_mv)
+{
+    float TEMP_DEPENDANCE = 1.10;   // Reasonable avg. mV/C dependance between sensors
+    float curr_temp = calculate_celsius_from_mv(temp_mv);
+    float temp_diff  = REF_TEMP - curr_temp;
+    return raw_analyte_mv + round((temp_diff * TEMP_DEPENDANCE));
+}
+
+/* Takes SAADC mV reading as input and returns the actual battery
+ * voltage, recorded at time of sensor reading. Battery voltage
+ * is connected to a voltage divider with constant resistors
+ * R1 = 3M and R2 = 1M. 
+ */
+uint32_t calculate_battvoltage_from_mv(uint32_t batt_mv)
+{
+    // batt_mv = real_batt_voltage * (R2 / (R1 + R2))
+    // real_batt_voltage = batt_mv * ((R1 + R2) / R2)
+    uint32_t R1 = 3000000;
+    uint32_t R2 = 1000000;
+    return batt_mv * ((R1 + R2) / R2);
 }
 
 
@@ -590,50 +627,96 @@ void substring(char s[], char sub[], int p, int l) {
 
 /* Takes mmol/L value and converts to pK or pNa
  */
-double mmol_per_L_to_px(double mmol_L)
+float mmol_per_L_to_px(float mmol_L)
 {
     // Convert mmol/L to mol/L
-    double mol_L = mmol_L / 1000;
+    float mol_L = mmol_L / 1000;
     return -log10(mol_L);
 }
 
 /* Takes pK or pNa value and converts to mmol/L
  */
-double px_to_mmol_per_L(double px)
+float px_to_mmol_per_L(float px)
 {
     return pow(10.0, -px) * 1000;
 }
 
-// Read saadc values for temperature, battery level, and px to store for calibration
+void read_saadc_and_store_avg_in_cal_pt(int samples)
+{
+    uint32_t AVG_MV_VAL = 0;
+    nrf_saadc_value_t temp_val = 0;
+    ret_code_t err_code;
+    // Average readings
+    for (int i = 0; i < samples; i++) {
+      err_code = nrfx_saadc_sample_convert(0, &temp_val);
+      APP_ERROR_CHECK(err_code);
+      if (temp_val < 0)
+          AVG_MV_VAL += 0;
+      else
+          AVG_MV_VAL += saadc_result_to_mv(temp_val);
+    }
+    AVG_MV_VAL = AVG_MV_VAL / samples;
+    // Assign averaged readings to the correct calibration point
+    if(!PT1_READ){
+      PT1_MV_VAL = (float)AVG_MV_VAL;
+    }
+    else if (PT1_READ && !PT2_READ){
+      PT2_MV_VAL = (float)AVG_MV_VAL;
+    }
+    else if (PT1_READ && PT2_READ && !PT3_READ){
+       PT3_MV_VAL = (float)AVG_MV_VAL;
+    }  
+}
+
+void read_saadc_and_set_ref_temp(int samples)
+{
+    uint32_t AVG_MV_VAL = 0;
+    nrf_saadc_value_t temp_val = 0;
+    ret_code_t err_code;
+    // Average readings
+    for (int i = 0; i < samples; i++) {
+      err_code = nrfx_saadc_sample_convert(0, &temp_val);
+      APP_ERROR_CHECK(err_code);
+      if (temp_val < 0)
+          AVG_MV_VAL += 0;
+      else
+          AVG_MV_VAL += saadc_result_to_mv(temp_val);
+    }
+    AVG_MV_VAL = AVG_MV_VAL / samples;
+    if (!PT1_READ) {
+        REF_TEMP = calculate_celsius_from_mv(AVG_MV_VAL);
+        PT1_READ = true;
+    }
+    else if (PT1_READ && !PT2_READ) {
+        REF_TEMP = REF_TEMP + calculate_celsius_from_mv(AVG_MV_VAL);
+        if (NUM_CAL_PTS == 2) {REF_TEMP = REF_TEMP / 2.0;}
+        PT2_READ = true;
+    }
+    else if (PT1_READ && PT2_READ && !PT3_READ) {
+       REF_TEMP = REF_TEMP + calculate_celsius_from_mv(AVG_MV_VAL);
+       REF_TEMP = REF_TEMP / 3.0;
+       PT3_READ = true;
+    }
+    NRF_LOG_INFO("ref temp: " NRF_LOG_FLOAT_MARKER " ", NRF_LOG_FLOAT(REF_TEMP));
+}
+
+// Read saadc values for temperature and px to store for calibration
 void read_saadc_for_calibration(void) 
 {
     int NUM_SAMPLES = 150;
-    nrf_saadc_value_t temp_val = 0;
-    ret_code_t err_code;
-    AVG_PX_VAL = 0;
-    READ_CAL_DATA = true;
-    PX_IS_READ = false;
-    // Take saadc readings for px, temp and battery
+    PX_IS_READ      = false;
+    BATTERY_IS_READ = false;
+
+    // Reset SAADC state before taking first calibration point
+    if (!PT1_READ) {disable_px_voltage_reading();}
     enable_px_voltage_reading();
-    for (int i = 0; i < NUM_SAMPLES; i++) {
-      err_code = nrfx_saadc_sample_convert(0, &temp_val);
-      APP_ERROR_CHECK(err_code);
-      AVG_PX_VAL += saadc_result_to_mv(temp_val);
-    }
-    AVG_PX_VAL = AVG_PX_VAL / NUM_SAMPLES;
-    // Assign averaged readings to the correct calibration point
-    if(!PT1_READ){
-      PT1_MV_VAL = (double)AVG_PX_VAL;
-      PT1_READ   = true;
-    }
-    else if (PT1_READ && !PT2_READ){
-      PT2_MV_VAL = (double)AVG_PX_VAL;
-      PT2_READ = true;
-    }
-    else if (PT1_READ && PT2_READ && !PT3_READ){
-       PT3_MV_VAL = (double)AVG_PX_VAL;
-       PT3_READ = true;
-    }    
+    read_saadc_and_store_avg_in_cal_pt(NUM_SAMPLES);   
+    // Reset saadc to read temperature value
+    disable_px_voltage_reading();
+    PX_IS_READ = true;
+    BATTERY_IS_READ = true; // Work around to read temperature values
+    enable_px_voltage_reading();
+    read_saadc_and_set_ref_temp(NUM_SAMPLES);
     disable_px_voltage_reading();
 }
 
@@ -642,7 +725,6 @@ void read_saadc_for_calibration(void)
 void reset_calibration_state()
 {
     CAL_MODE        = false;
-    READ_CAL_DATA   = false;
     CAL_PERFORMED   = 1.0;
     PT1_READ        = false;
     PT2_READ        = false;
@@ -660,8 +742,8 @@ void perform_calibration(uint8_t cal_pts)
   if (cal_pts == 1) {
     // Compare mV for px value to mV calculated for same px with current M & B values,
     // then adjust B value by the difference in mV values (shift intercept of line)
-    double incorrect_px  = calculate_px_from_mV((uint32_t)PT1_MV_VAL);
-    double cal_adjustment = PT1_PX_VAL - incorrect_px;
+    float incorrect_px  = calculate_px_from_mV((uint32_t)PT1_MV_VAL);
+    float cal_adjustment = PT1_PX_VAL - incorrect_px;
     BVAL_CALIBRATION = BVAL_CALIBRATION + cal_adjustment;
     NRF_LOG_INFO("MVAL: " NRF_LOG_FLOAT_MARKER " ", NRF_LOG_FLOAT(MVAL_CALIBRATION));
     NRF_LOG_INFO("BVAL: " NRF_LOG_FLOAT_MARKER " ", NRF_LOG_FLOAT(BVAL_CALIBRATION));
@@ -669,14 +751,14 @@ void perform_calibration(uint8_t cal_pts)
   }
   else if (cal_pts == 2) {
     // Create arrays of px value and corresponding mV values (change all line properties)
-    double x_vals[] = {PT1_MV_VAL, PT2_MV_VAL};
-    double y_vals[] = {PT1_PX_VAL, PT2_PX_VAL};
+    float x_vals[] = {PT1_MV_VAL, PT2_MV_VAL};
+    float y_vals[] = {PT1_PX_VAL, PT2_PX_VAL};
     linreg(cal_pts, x_vals, y_vals);
   }
   else if (cal_pts == 3) {
     // Create arrays of px value and corresponding mV values (change all line properties)
-    double x_vals[] = {PT1_MV_VAL, PT2_MV_VAL, PT3_MV_VAL};
-    double y_vals[] = {PT1_PX_VAL, PT2_PX_VAL, PT3_PX_VAL};
+    float x_vals[] = {PT1_MV_VAL, PT2_MV_VAL, PT3_MV_VAL};
+    float y_vals[] = {PT1_PX_VAL, PT2_PX_VAL, PT3_PX_VAL};
     linreg(cal_pts, x_vals, y_vals);
   }
 }
@@ -1274,22 +1356,45 @@ void restart_saadc(void)
     enable_px_voltage_reading(); 
 }
 
-double calculate_px_from_mV(uint32_t px_val)
+float calculate_px_from_mV(uint32_t px_val)
 {
     // px = (px_val - BVAL_CALIBRATION) / (MVAL_CALIBRATION)
-    return ((double)px_val * MVAL_CALIBRATION) + BVAL_CALIBRATION;
+    return ((float)px_val * MVAL_CALIBRATION) + BVAL_CALIBRATION;
+}
+
+// Returns 99.9 if val is >= 100.0, returns 0.1 if val is < 0
+float validate_float_range(float val)
+{
+    if (val > 99.9) {
+        return 99.9;
+    } else if (val < 0.0) {
+        return 0.1;
+    } else {
+        return val;
+    }
+}
+
+// Returns 3000 (max mV range) if val is > 3000
+uint32_t validate_uint_range(uint32_t val)
+{
+    if (val > 3000)
+        return 3000;
+    else
+        return val;
 }
 
 /* Calculates the pK value from stored mv value, then converts from pK to mmol/L.
  * Data is rounded to nearest 0.1 mmol/L decimal place. Stores each digit from 
  * packet[p] to packet[p+3]
  */
-void pack_calibrated_px_val(uint32_t px_mv_val, uint8_t* total_packet, uint8_t p)
+void pack_calibrated_px_val(uint32_t px_mv_val, uint32_t temp_val,
+                                        uint8_t* total_packet, uint8_t p)
 {
     uint32_t ASCII_DIG_BASE = 48;
-    double pX_value = calculate_px_from_mV(px_mv_val);
-    double x_mmol_L = px_to_mmol_per_L(pX_value);
-    double x_decimal_vals = (x_mmol_L - floor(x_mmol_L)) * 100;
+    float pX_value = calculate_px_from_mV(sensor_temp_comp(px_mv_val, temp_val));
+    float x_mmol_L = px_to_mmol_per_L(pX_value);
+    x_mmol_L = validate_float_range(x_mmol_L);
+    float x_decimal_vals = (x_mmol_L - floor(x_mmol_L)) * 100;
     // Round K decimal values to nearest 0.1 accuracy
     x_decimal_vals = round(x_decimal_vals / 10) * 10;
     // If decimals rounds to 100, increment k_mmol_l and set decimals to 0
@@ -1309,8 +1414,9 @@ void pack_calibrated_px_val(uint32_t px_mv_val, uint8_t* total_packet, uint8_t p
 void pack_temperature_val(uint32_t temp_val, uint8_t* total_packet, uint8_t p)
 {
     uint32_t ASCII_DIG_BASE = 48;
-    double real_temp = calculate_celsius_from_mv(temp_val);
-    double temp_decimal_vals = (real_temp - floor(real_temp)) * 100;
+    float real_temp = calculate_celsius_from_mv(temp_val);
+    real_temp = validate_float_range(real_temp);
+    float temp_decimal_vals = (real_temp - floor(real_temp)) * 100;
     total_packet[p]   = (uint8_t) ((uint8_t)floor(real_temp / 10) + ASCII_DIG_BASE);
     total_packet[p+1] = (uint8_t) ((uint8_t)floor((uint8_t)real_temp % 10) + ASCII_DIG_BASE);
     total_packet[p+2] = 46;
@@ -1353,10 +1459,12 @@ void create_bluetooth_packet(uint32_t px_val,   uint32_t batt_val,
     */
       
     if (CAL_PERFORMED)  
-        pack_calibrated_px_val(px_val, total_packet, 0);
+        pack_calibrated_px_val(px_val, temp_val, total_packet, 0);
     pack_temperature_val(temp_val, total_packet, 5);
+    // Convert battery saadc mV to real battery voltage from voltage divider
+    batt_val = calculate_battvoltage_from_mv(validate_uint_range(batt_val));
     pack_mv_value(batt_val, total_packet, 10, 4);
-    pack_mv_value(px_val, total_packet, 15, 4);  
+    pack_mv_value(validate_uint_range(px_val), total_packet, 15, 4);  
 }
 
 /* Converts SAADC result to mV value using gain, prescaler and resolution values
@@ -1384,8 +1492,11 @@ void read_saadc_for_regular_protocol(void)
     for (int i = 0; i < NUM_SAMPLES; i++) {
       err_code = nrfx_saadc_sample_convert(0, &temp_val);
       APP_ERROR_CHECK(err_code);
-      AVG_MV_VAL += saadc_result_to_mv(temp_val);
-      nrf_delay_us(15);
+      if (temp_val < 0) {
+          AVG_MV_VAL += 0;
+      } else {
+          AVG_MV_VAL += saadc_result_to_mv(temp_val);
+      }
     }
     AVG_MV_VAL = AVG_MV_VAL / NUM_SAMPLES;
     // Assign averaged readings to the correct calibration point
@@ -1491,7 +1602,7 @@ void single_shot_timer_handler()
     // Delay to ensure appropriate timing 
     enable_isfet_circuit();       
     // Slight delay for ISFET to achieve optimal ISFET reading
-    nrf_delay_ms(10);              
+    nrf_delay_ms(100);              
     // Begin SAADC initialization/start
 
     /* * * * * * * * * * * * * * *
@@ -1514,10 +1625,12 @@ void disconn_delay_timer_handler()
     err_code = app_timer_stop(m_timer_disconn_delay);
     APP_ERROR_CHECK(err_code);
 
-    // Disconnect from central
-    err_code = sd_ble_gap_disconnect(m_conn_handle, 
-                                     BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-    APP_ERROR_CHECK(err_code);
+    if (m_conn_handle != BLE_CONN_HANDLE_INVALID) {
+      // Disconnect from central
+      err_code = sd_ble_gap_disconnect(m_conn_handle, 
+                                       BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+      APP_ERROR_CHECK(err_code);
+    }
 }
 
 
@@ -1641,19 +1754,19 @@ void gatt_init(void)
 }
 
 /* Helper function for linreg */
-inline static double sqr(double x) {
+inline static float sqr(float x) {
     return x*x;
 }
 
 /* Function for running linear regression on two and three point calibration data
  */
-void linreg(int num, double x[], double y[])
+void linreg(int num, float x[], float y[])
 {
-    double sumx  = 0.0;             /* sum of x     */
-    double sumx2 = 0.0;             /* sum of x**2  */
-    double sumxy = 0.0;             /* sum of x * y */
-    double sumy  = 0.0;             /* sum of y     */
-    double sumy2 = 0.0;             /* sum of y**2  */
+    float sumx  = 0.0;             /* sum of x     */
+    float sumx2 = 0.0;             /* sum of x**2  */
+    float sumxy = 0.0;             /* sum of x * y */
+    float sumy  = 0.0;             /* sum of y     */
+    float sumy2 = 0.0;             /* sum of y**2  */
 
     for (int i=0;i<num;i++){ 
         sumx  += x[i];       
@@ -1663,7 +1776,7 @@ void linreg(int num, double x[], double y[])
         sumy2 += sqr(y[i]); 
     } 
 
-    double denom = (num * sumx2 - sqr(sumx));
+    float denom = (num * sumx2 - sqr(sumx));
 
     if (denom == 0) {
         // singular matrix. can't solve the problem.
