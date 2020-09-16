@@ -150,8 +150,7 @@
 
 #define SAMPLES_IN_BUFFER               50                                          /**< SAADC buffer > */
 
-//#define DATA_INTERVAL                   900000
-#define DATA_INTERVAL 1000
+#define DATA_INTERVAL                   900000
 
 #define NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(PIN_P) \
 {                                                   \
@@ -180,8 +179,7 @@ APP_TIMER_DEF(m_timer_id);
 
 // Timer and control flag to enable delay before disconnecting
 APP_TIMER_DEF(m_timer_disconn_delay);
-//bool   DISCONN_DELAY    = true;
-bool   DISCONN_DELAY = false;
+bool   DISCONN_DELAY    = true;
 #define DISCONN_DELAY_MS   15000 
 
 
