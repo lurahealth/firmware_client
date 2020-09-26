@@ -113,7 +113,7 @@
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define DEVICE_NAME                     "Lura_Test_Dan"                             /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "LuraHealth_Dan"                             /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
@@ -144,7 +144,7 @@
 #define SEC_PARAM_MIN_KEY_SIZE          7                                           /**< Minimum encryption key size. */
 #define SEC_PARAM_MAX_KEY_SIZE          16                                          /**< Maximum encryption key size. */
 
-#define DATA_INTERVAL                   900000
+#define DATA_INTERVAL                   5000
 
 #define NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(PIN_P) \
 {                                                   \
@@ -899,7 +899,11 @@ void check_for_calibration(char **packet)
           err_code = ble_nus_data_send(&m_nus, CALRESULTS, &SIZE_RESULTS, m_conn_handle);
           write_cal_values_to_flash();
           reset_calibration_state();
-          disconnect_from_central();
+          // Delay before disconnecting from central
+          err_code = app_timer_start(m_timer_disconn_delay, 
+                                     APP_TIMER_TICKS(10000), NULL);
+          APP_ERROR_CHECK(err_code);
+          //disconnect_from_central();
         }
     }
 }
@@ -1069,8 +1073,6 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
             break;
         case BLE_ADV_EVT_IDLE:
             NRF_LOG_INFO("on_adv_evt IDLE EVENT");
-            // Restart timer 
-//            init_and_start_app_timer();
             break;
         default:
             break;
@@ -1399,7 +1401,6 @@ void disable_isfet_circuit(void)
 {
      nrfx_gpiote_out_clear(ENABLE_ISFET_PIN);
      nrfx_gpiote_out_uninit(ENABLE_ISFET_PIN);
-     nrfx_gpiote_uninit();
 }
 
 /* This function uninits saadc, clear interrupt for power optimization, and
@@ -2134,7 +2135,7 @@ int main(void)
     
     // Start intermittent data reading <> advertising protocol
     enable_isfet_circuit();
-    nrf_delay_ms(10);
+    nrf_delay_ms(100);
     enable_px_voltage_reading();
 
     // Enter main loop for power management
