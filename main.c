@@ -117,7 +117,7 @@
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define DEVICE_NAME                     "Lura_Test_Dan"                             /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "LuraHealth_Dan01"                             /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
@@ -150,7 +150,7 @@
 
 #define SAMPLES_IN_BUFFER               50                                          /**< SAADC buffer > */
 
-#define DATA_INTERVAL                   900000
+#define DATA_INTERVAL                   300000
 
 #define NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(PIN_P) \
 {                                                   \
@@ -893,7 +893,10 @@ void check_for_calibration(char **packet)
           APP_ERROR_CHECK(err_code);
           write_cal_values_to_flash();
           reset_calibration_state();
-          disconnect_from_central();
+          err_code = app_timer_start(m_timer_disconn_delay, 
+                                     APP_TIMER_TICKS(10000), NULL);
+          APP_ERROR_CHECK(err_code);
+          //disconnect_from_central();
         }
     }
 }
@@ -1375,8 +1378,6 @@ void disable_isfet_circuit(void)
 {
      nrfx_gpiote_out_clear(ENABLE_ISFET_PIN);
      nrfx_gpiote_out_uninit(ENABLE_ISFET_PIN);
-     nrfx_gpiote_uninit();
-
 }
 
 
