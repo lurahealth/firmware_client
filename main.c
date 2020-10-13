@@ -117,7 +117,7 @@
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define DEVICE_NAME                     "LuraHealth_Dan04"                             /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "LuraHealth_Dan14"                             /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
@@ -716,11 +716,12 @@ void read_saadc_for_calibration(void)
     enable_pH_voltage_reading();
     read_saadc_and_store_avg_in_cal_pt(NUM_SAMPLES);   
     // Reset saadc to read temperature value
-    disable_isfet_circuit();
-    disable_pH_voltage_reading();
+//    disable_isfet_circuit();
+//    disable_pH_voltage_reading();
     PH_IS_READ = true;
     BATTERY_IS_READ = true; // Work around to read temperature values
-    enable_pH_voltage_reading();
+//    enable_pH_voltage_reading();
+    restart_saadc();
     read_saadc_and_set_ref_temp(NUM_SAMPLES);
     disable_pH_voltage_reading();
 }
