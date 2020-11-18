@@ -117,7 +117,7 @@
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define DEVICE_NAME                     "LuraHealth_Dan14"                             /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "LuraHealth_Dan49"                             /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
@@ -150,7 +150,8 @@
 
 #define SAMPLES_IN_BUFFER               50                                          /**< SAADC buffer > */
 
-#define DATA_INTERVAL                   300000
+//#define DATA_INTERVAL                   300000
+#define DATA_INTERVAL                   5000
 
 #define NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(PIN_P) \
 {                                                   \
@@ -220,6 +221,7 @@ float     MVAL_CALIBRATION = 0;
 float     BVAL_CALIBRATION = 0;
 float     RVAL_CALIBRATION = 0;
 float     CAL_PERFORMED    = 0;
+bool     STAYON_FLAG       = false;
 bool     PH_IS_READ        = false;
 bool     BATTERY_IS_READ   = false;
 bool     SAADC_CALIBRATED  = false;
@@ -230,7 +232,6 @@ bool     PT2_READ          = false;
 bool     PT3_READ          = false;
 bool     SEND_BUFFERED_DATA  = false;
 bool     HVN_TX_EVT_COMPLETE = false;
-
 
 static volatile uint8_t write_flag=0;
 
@@ -294,7 +295,7 @@ uint32_t sensor_temp_comp       (uint32_t raw_analyte_mv, uint32_t temp_mv);
  * Each reading requires 10 bytes (3x uint16_t, 1x float), so this 
  * buffer system can store 4.8kB of data.
  */
- #define DATA_BUFF_SIZE 480
+ #define DATA_BUFF_SIZE 500
  uint16_t TOTAL_DATA_IN_BUFFERS = 0;
 
  uint16_t ph_mv  [DATA_BUFF_SIZE];
@@ -440,7 +441,7 @@ float mv_to_therm_resistance(uint32_t mv)
     therm_res = (Vtemp * R1) / (Vin - Vtemp);
 
     // Catch invalid resistance values, set to 500 ohm if negative
-    if(therm_res < 500)
+    if(therm_res < 500 || mv > 1799)
         therm_res = 500;
 
     return therm_res;
@@ -827,6 +828,28 @@ void pack_lin_reg_values_into_packet(char report_packet[45], uint16_t *pack_len)
    *pack_len = len+2;
 }
 
+/* Turns the device to full power off state if "PWROFF" packet is received */
+void check_for_pwroff(char **packet)
+{
+    char *PWROFF = "PWROFF";
+    if (strstr(*packet, PWROFF) != NULL){
+        NRF_LOG_INFO("received pwroff\n");
+        nrfx_gpiote_out_clear(CHIP_POWER_PIN);
+        nrfx_gpiote_out_uninit(CHIP_POWER_PIN);
+        nrfx_gpiote_uninit();
+    }
+}
+
+/* Adjusts default adv. timeout, disconnect state from full power off to sleep */
+void check_for_stayon(char **packet)
+{
+    char *STAYON = "STAYON";
+    if (strstr(*packet, STAYON) != NULL){
+        STAYON_FLAG = true;
+    }
+}
+
+
 /*
  * Checks packet contents to appropriately perform calibration
  */
@@ -834,7 +857,6 @@ void check_for_calibration(char **packet)
 {
     // Possible Strings to be received by pH device
     char *STARTCAL  = "STARTCAL";
-    char *PWROFF    = "PWROFF";
     char *PT        = "PT";
     // Possible strings to send to mobile application
     char CALBEGIN[9] = {"CALBEGIN\n"};   
@@ -848,12 +870,6 @@ void check_for_calibration(char **packet)
     char pH_val_substring[4];
 
     uint32_t err_code;
-
-    if (strstr(*packet, PWROFF) != NULL){
-        NRF_LOG_INFO("received pwroff\n");
-        disconnect_from_central();
-        nrfx_gpiote_out_clear(CHIP_POWER_PIN);
-    }
 
     if (strstr(*packet, STARTCAL) != NULL) {
         char cal_pts_str[1];
@@ -946,6 +962,8 @@ void nus_data_handler(ble_nus_evt_t * p_evt)
         }
         // Check pack for calibration protocol details
         check_for_calibration(&data_ptr);
+        check_for_pwroff(&data_ptr);
+        check_for_stayon(&data_ptr);
         check_for_buffer_done_signal(&data_ptr);
     }
 
@@ -1088,7 +1106,14 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
                  *        fills up to 480. Unlikely, but application
                  *        should be able to handle this.
                  */
-            init_and_start_app_timer();
+            if(STAYON_FLAG) {
+                init_and_start_app_timer();
+            }
+            else {
+                nrfx_gpiote_out_clear(CHIP_POWER_PIN);
+                nrfx_gpiote_out_uninit(CHIP_POWER_PIN);
+                nrfx_gpiote_uninit();
+            }    
             break;
 
         case BLE_GAP_EVT_CONNECTED:
@@ -1114,7 +1139,14 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
             CONNECTION_MADE = false;
             NRF_LOG_INFO("DISCONNECTED\n");
-            init_and_start_app_timer();
+            if(STAYON_FLAG) {
+                init_and_start_app_timer();
+            }
+            else {
+                nrfx_gpiote_out_clear(CHIP_POWER_PIN);
+                nrfx_gpiote_out_uninit(CHIP_POWER_PIN);
+                nrfx_gpiote_uninit();
+            }   
 
             break;
 
@@ -1138,8 +1170,14 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
                 sd_ble_gap_disconnect(p_ble_evt->evt.gattc_evt.conn_handle,
                                       BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
-            // restart timer
-            init_and_start_app_timer();
+            if(STAYON_FLAG) {
+                init_and_start_app_timer();
+            }
+            else {
+                nrfx_gpiote_out_clear(CHIP_POWER_PIN);
+                nrfx_gpiote_out_uninit(CHIP_POWER_PIN);
+                nrfx_gpiote_uninit();
+            }   
             break;
 
         case BLE_GATTS_EVT_TIMEOUT:
@@ -1151,13 +1189,27 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
             APP_ERROR_CHECK(err_code);
             // restart timer
-            init_and_start_app_timer();
+            if(STAYON_FLAG) {
+                init_and_start_app_timer();
+            }
+            else {
+                nrfx_gpiote_out_clear(CHIP_POWER_PIN);
+                nrfx_gpiote_out_uninit(CHIP_POWER_PIN);
+                nrfx_gpiote_uninit();
+            }   
             break;
 
          case BLE_GAP_EVT_TIMEOUT:
             NRF_LOG_INFO("TIMEOUT GAP EVT\n");
             // Restart timer 
-            init_and_start_app_timer();
+            if(STAYON_FLAG) {
+                init_and_start_app_timer();
+            }
+            else {
+                nrfx_gpiote_out_clear(CHIP_POWER_PIN);
+                nrfx_gpiote_out_uninit(CHIP_POWER_PIN);
+                nrfx_gpiote_uninit();
+            }   
             break;
 
          case BLE_GAP_EVT_AUTH_STATUS:
