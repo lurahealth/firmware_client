@@ -117,7 +117,7 @@
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define DEVICE_NAME                     "LuraHealth_Dan49"                             /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "LuraHealth_Dan13"                             /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
@@ -150,8 +150,7 @@
 
 #define SAMPLES_IN_BUFFER               50                                          /**< SAADC buffer > */
 
-//#define DATA_INTERVAL                   300000
-#define DATA_INTERVAL                   5000
+#define DATA_INTERVAL                   300000
 
 #define NRF_SAADC_CUSTOM_CHANNEL_CONFIG_SE(PIN_P) \
 {                                                   \
@@ -345,7 +344,8 @@ void add_data_to_buffers(void)
     temp_mv[i] = (uint16_t) AVG_TEMP_VAL;
     batt_mv[i] = (uint16_t) AVG_BATT_VAL;
     if(CAL_PERFORMED) {
-        float ph_cal_val = calculate_pH_from_mV(sensor_temp_comp(AVG_PH_VAL, AVG_TEMP_VAL));
+        //float ph_cal_val = calculate_pH_from_mV(sensor_temp_comp(AVG_PH_VAL, AVG_TEMP_VAL));
+        float ph_cal_val = calculate_pH_from_mV(AVG_PH_VAL);
         ph_cal[i] = validate_float_range(ph_cal_val);
     }
     TOTAL_DATA_IN_BUFFERS++;
@@ -1492,7 +1492,8 @@ void pack_calibrated_ph_val(uint32_t ph_val, float ph_val_cal,
       float real_pH = 0;
       if (ph_val_cal == NULL) {
         NRF_LOG_INFO("*** ph_val_cal == NULL ***");
-        real_pH = calculate_pH_from_mV(sensor_temp_comp(ph_val, temp_val));
+        // real_pH = calculate_pH_from_mV(sensor_temp_comp(ph_val, temp_val));
+        real_pH = calculate_pH_from_mV(ph_val);
         real_pH = validate_float_range(real_pH);
       }
       else if (ph_val_cal != NULL) {
