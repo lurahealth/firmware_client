@@ -117,7 +117,7 @@
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define DEVICE_NAME                     "LuraHealth_Dan13"                             /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "LuraHealth_Dan59"                             /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
@@ -458,6 +458,7 @@ float therm_resistance_to_kelvins(float therm_res)
 
     real_kelvins = (beta_constant * ref_temp) / 
                       (beta_constant + (ref_temp * log(therm_res/ref_resistance)));
+    NRF_LOG_INFO("kelvins: " NRF_LOG_FLOAT_MARKER " \n", NRF_LOG_FLOAT(real_kelvins));
 
     return real_kelvins;
 }
@@ -713,7 +714,7 @@ void read_saadc_for_calibration(void)
     // Reset SAADC state before taking first calibration point
     if (!PT1_READ) {disable_pH_voltage_reading();}
     enable_isfet_circuit();
-    nrf_delay_ms(100);
+    nrf_delay_ms(200);
     enable_pH_voltage_reading();
     read_saadc_and_store_avg_in_cal_pt(NUM_SAMPLES);   
     // Reset saadc to read temperature value
@@ -1639,6 +1640,7 @@ void read_saadc_for_regular_protocol(void)
     else {
        AVG_TEMP_VAL = AVG_MV_VAL;
        NRF_LOG_INFO("read temp val, restarting: %d", AVG_TEMP_VAL);
+       calculate_celsius_from_mv(AVG_TEMP_VAL);
        PH_IS_READ = false;
        BATTERY_IS_READ = false;
        disable_pH_voltage_reading();
@@ -1721,7 +1723,7 @@ void single_shot_timer_handler()
     // Delay to ensure appropriate timing 
     enable_isfet_circuit();       
     // Slight delay for ISFET to achieve optimal ISFET reading
-    nrf_delay_ms(100);              
+    nrf_delay_ms(200);              
     // Begin SAADC initialization/start
 
     /* * * * * * * * * * * * * * *
@@ -1748,6 +1750,14 @@ void disconn_delay_timer_handler()
       err_code = sd_ble_gap_disconnect(m_conn_handle, 
                                        BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
       APP_ERROR_CHECK(err_code);
+      if(STAYON_FLAG) {
+        init_and_start_app_timer();
+      }
+      else {
+        nrfx_gpiote_out_clear(CHIP_POWER_PIN);
+        nrfx_gpiote_out_uninit(CHIP_POWER_PIN);
+        nrfx_gpiote_uninit();
+      }
     }
 }
 
@@ -2179,7 +2189,7 @@ int main(void)
     
     // Start intermittent data reading <> advertising protocol
     enable_isfet_circuit();
-    nrf_delay_ms(100);
+    nrf_delay_ms(200);
     enable_pH_voltage_reading();
 
     // Enter main loop for power management
