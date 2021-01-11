@@ -226,6 +226,7 @@ float     MVAL_CALIBRATION = 0;
 float     BVAL_CALIBRATION = 0;
 float     RVAL_CALIBRATION = 0;
 float     CAL_PERFORMED    = 0;
+bool     STAYON_FLAG       = false;
 bool     PH_IS_READ        = false;
 bool     NA_IS_READ        = false;
 bool     K_IS_READ         = false;
@@ -837,6 +838,27 @@ void pack_lin_reg_values_into_packet(char report_packet[45], uint16_t *pack_len)
    *pack_len = len+2;
 }
 
+/* Turns the device to full power off state if "PWROFF" packet is received */
+void check_for_pwroff(char **packet)
+{
+    char *PWROFF = "PWROFF";
+    if (strstr(*packet, PWROFF) != NULL){
+        NRF_LOG_INFO("received pwroff\n");
+        nrfx_gpiote_out_clear(CHIP_POWER_PIN);
+        nrfx_gpiote_out_uninit(CHIP_POWER_PIN);
+        nrfx_gpiote_uninit();
+    }
+}
+
+/* Adjusts default adv. timeout, disconnect state from full power off to sleep */
+void check_for_stayon(char **packet)
+{
+    char *STAYON = "STAYON";
+    if (strstr(*packet, STAYON) != NULL){
+        STAYON_FLAG = true;
+    }
+}
+
 /*
  * Checks packet contents to appropriately perform calibration
  */
@@ -844,7 +866,6 @@ void check_for_calibration(char **packet)
 {
     // Possible Strings to be received by pH device
     char *STARTCAL  = "STARTCAL";
-    char *PWROFF    = "PWROFF";
     char *PT        = "PT";
     // Possible strings to send to mobile application
     char CALBEGIN[9] = {"CALBEGIN\n"};   
@@ -858,12 +879,6 @@ void check_for_calibration(char **packet)
     char pH_val_substring[4];
 
     uint32_t err_code;
-
-    if (strstr(*packet, PWROFF) != NULL){
-        NRF_LOG_INFO("received pwroff\n");
-        disconnect_from_central();
-        nrfx_gpiote_out_clear(CHIP_POWER_PIN);
-    }
 
     if (strstr(*packet, STARTCAL) != NULL) {
         char cal_pts_str[1];
@@ -956,6 +971,8 @@ void nus_data_handler(ble_nus_evt_t * p_evt)
         }
         // Check pack for calibration protocol details
         check_for_calibration(&data_ptr);
+        check_for_pwroff(&data_ptr);
+        check_for_stayon(&data_ptr);
         check_for_buffer_done_signal(&data_ptr);
     }
 
@@ -1098,7 +1115,14 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
                  *        fills up to 480. Unlikely, but application
                  *        should be able to handle this.
                  */
-            init_and_start_app_timer();
+            if(STAYON_FLAG) {
+                init_and_start_app_timer();
+            }
+            else {
+                nrfx_gpiote_out_clear(CHIP_POWER_PIN);
+                nrfx_gpiote_out_uninit(CHIP_POWER_PIN);
+                nrfx_gpiote_uninit();
+            }   
             break;
 
         case BLE_GAP_EVT_CONNECTED:
@@ -1124,7 +1148,14 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
             CONNECTION_MADE = false;
             NRF_LOG_INFO("DISCONNECTED\n");
-            init_and_start_app_timer();
+            if(STAYON_FLAG) {
+                init_and_start_app_timer();
+            }
+            else {
+                nrfx_gpiote_out_clear(CHIP_POWER_PIN);
+                nrfx_gpiote_out_uninit(CHIP_POWER_PIN);
+                nrfx_gpiote_uninit();
+            }  
 
             break;
 
@@ -1148,8 +1179,14 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
                 sd_ble_gap_disconnect(p_ble_evt->evt.gattc_evt.conn_handle,
                                       BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
-            // restart timer
-            init_and_start_app_timer();
+            if(STAYON_FLAG) {
+                init_and_start_app_timer();
+            }
+            else {
+                nrfx_gpiote_out_clear(CHIP_POWER_PIN);
+                nrfx_gpiote_out_uninit(CHIP_POWER_PIN);
+                nrfx_gpiote_uninit();
+            }  
             break;
 
         case BLE_GATTS_EVT_TIMEOUT:
@@ -1161,13 +1198,27 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
             APP_ERROR_CHECK(err_code);
             // restart timer
-            init_and_start_app_timer();
+            if(STAYON_FLAG) {
+                init_and_start_app_timer();
+            }
+            else {
+                nrfx_gpiote_out_clear(CHIP_POWER_PIN);
+                nrfx_gpiote_out_uninit(CHIP_POWER_PIN);
+                nrfx_gpiote_uninit();
+            }  
             break;
 
          case BLE_GAP_EVT_TIMEOUT:
             NRF_LOG_INFO("TIMEOUT GAP EVT\n");
             // Restart timer 
-            init_and_start_app_timer();
+            if(STAYON_FLAG) {
+                init_and_start_app_timer();
+            }
+            else {
+                nrfx_gpiote_out_clear(CHIP_POWER_PIN);
+                nrfx_gpiote_out_uninit(CHIP_POWER_PIN);
+                nrfx_gpiote_uninit();
+            }  
             break;
 
          case BLE_GAP_EVT_AUTH_STATUS:
@@ -1788,6 +1839,14 @@ void disconn_delay_timer_handler()
       err_code = sd_ble_gap_disconnect(m_conn_handle, 
                                        BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
       APP_ERROR_CHECK(err_code);
+      if(STAYON_FLAG) {
+          init_and_start_app_timer();
+      }
+      else {
+          nrfx_gpiote_out_clear(CHIP_POWER_PIN);
+          nrfx_gpiote_out_uninit(CHIP_POWER_PIN);
+          nrfx_gpiote_uninit();
+      }  
     }
 }
 
